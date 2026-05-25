@@ -104,6 +104,93 @@ let ipToString = (ip: number): string => {
   return (ip >>> 24) + '.' + ((ip >> 16) & 255) + '.' + ((ip >> 8) & 255) + '.' + (ip & 255);
 };
 
+let parseIPRange = (range: string): number[] | null => {
+  let parts: string[] = range.split('-').map(part => part.trim());
+
+  if (parts.length === 1 && isValidIP(parts[0])) {
+    let ip: number = ipToInt(parts[0]);
+    return [ip, ip];
+  }
+
+  if (parts.length === 2 && validateIPRange(parts[0], parts[1])) {
+    return [ipToInt(parts[0]), ipToInt(parts[1])];
+  }
+
+  return null;
+};
+
+let normalizeRanges = (ranges: number[][]): number[][] => {
+  let sortedRanges: number[][] = ranges.sort((a, b) => a[0] - b[0]);
+  let normalizedRanges: number[][] = [];
+
+  for (let i = 0; i < sortedRanges.length; i++) {
+    let lastRange = normalizedRanges[normalizedRanges.length - 1];
+
+    if (lastRange && sortedRanges[i][0] <= lastRange[1] + 1) {
+      lastRange[1] = Math.max(lastRange[1], sortedRanges[i][1]);
+    } else {
+      normalizedRanges.push(sortedRanges[i].slice());
+    }
+  }
+
+  return normalizedRanges;
+};
+
+let removeExcludedRanges = (ranges: number[][], excludedRanges: number[][]): number[][] => {
+  let availableRanges: number[][] = normalizeRanges(ranges);
+  let normalizedExcludedRanges: number[][] = normalizeRanges(excludedRanges);
+
+  for (let i = 0; i < normalizedExcludedRanges.length; i++) {
+    let nextRanges: number[][] = [];
+
+    for (let j = 0; j < availableRanges.length; j++) {
+      let range = availableRanges[j];
+      let excluded = normalizedExcludedRanges[i];
+
+      if (excluded[1] < range[0] || excluded[0] > range[1]) {
+        nextRanges.push(range);
+      } else {
+        if (excluded[0] > range[0]) {
+          nextRanges.push([range[0], excluded[0] - 1]);
+        }
+
+        if (excluded[1] < range[1]) {
+          nextRanges.push([excluded[1] + 1, range[1]]);
+        }
+      }
+    }
+
+    availableRanges = nextRanges;
+  }
+
+  return availableRanges;
+};
+
+let generateIPFromRanges = (ranges: string[], excludedRanges: string[] = []): string => {
+  let parsedRanges: number[][] = ranges.map(parseIPRange).filter(range => range !== null) as number[][];
+  let parsedExcludedRanges: number[][] = excludedRanges.map(parseIPRange).filter(range => range !== null) as number[][];
+  let availableRanges: number[][] = removeExcludedRanges(parsedRanges, parsedExcludedRanges);
+  let total: number = availableRanges.reduce((sum, range) => sum + range[1] - range[0] + 1, 0);
+
+  if (total < 1) {
+    return '';
+  }
+
+  let offset: number = Math.floor(Math.random() * total);
+
+  for (let i = 0; i < availableRanges.length; i++) {
+    let rangeSize: number = availableRanges[i][1] - availableRanges[i][0] + 1;
+
+    if (offset < rangeSize) {
+      return ipToString(availableRanges[i][0] + offset);
+    }
+
+    offset -= rangeSize;
+  }
+
+  return '';
+};
+
 let isInternalIP = (host: string): boolean => {
   return (
     /^localhost$|^127(?:\.[0-9]+){0,2}\.[0-9]+$|^(?:0*\:)*?:?0*1$/.test(host) ||
@@ -156,6 +243,7 @@ export default {
   determineRequestType,
   findWhitelistRule,
   generateIP,
+  generateIPFromRanges,
   getIPRange,
   ipInRange,
   ipToInt,

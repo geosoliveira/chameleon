@@ -208,6 +208,18 @@ export class Chameleon {
   }
 
   public cleanSettings(): void {
+    if (!this.settings.headers.spoofIP.customMode) {
+      this.settings.headers.spoofIP.customMode = 'range';
+    }
+
+    if (!Array.isArray(this.settings.headers.spoofIP.locationRules)) {
+      this.settings.headers.spoofIP.locationRules = [];
+    }
+
+    if (!['include', 'exclude'].includes(this.settings.headers.spoofIP.locationMode)) {
+      this.settings.headers.spoofIP.locationMode = 'include';
+    }
+
     if (typeof this.settings.options.protectKBFingerprint.delay === 'string') {
       this.settings.options.protectKBFingerprint.delay = Number(this.settings.options.protectKBFingerprint.delay);
     }
@@ -982,6 +994,32 @@ export class Chameleon {
     if (this.settings.headers.spoofIP.enabled) {
       if (this.settings.headers.spoofIP.option === SpoofIPOption.Random) {
         this.tempStore.spoofIP = util.generateIP();
+      } else if (this.settings.headers.spoofIP.customMode === 'location') {
+        let includeRanges: string[] = this.settings.headers.spoofIP.locationMode === 'exclude' ? this.settings.ipRules.reduce((ranges, rule) => ranges.concat(rule.ips), []) : [];
+        let excludeRanges: string[] = [];
+
+        for (let i = 0; i < this.settings.headers.spoofIP.locationRules.length; i++) {
+          let selectedRule = this.settings.ipRules.find(r => r.id === this.settings.headers.spoofIP.locationRules[i].id);
+
+          if (selectedRule) {
+            if (this.settings.headers.spoofIP.locationRules[i].action === 'exclude') {
+              excludeRanges = excludeRanges.concat(selectedRule.ips);
+            } else if (this.settings.headers.spoofIP.locationMode === 'include') {
+              includeRanges = includeRanges.concat(selectedRule.ips);
+            }
+          }
+        }
+
+        this.tempStore.spoofIP = util.generateIPFromRanges(includeRanges, excludeRanges);
+
+        if (!this.tempStore.spoofIP && util.validateIPRange(this.settings.headers.spoofIP.rangeFrom, this.settings.headers.spoofIP.rangeTo)) {
+          let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
+          let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
+
+          this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
+        } else if (!this.tempStore.spoofIP) {
+          this.tempStore.spoofIP = util.generateIP();
+        }
       } else {
         let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
         let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
@@ -1220,6 +1258,18 @@ export class Chameleon {
         msg,
       };
     } else {
+      if (!impSettings.headers.spoofIP.customMode) {
+        impSettings.headers.spoofIP.customMode = 'range';
+      }
+
+      if (!Array.isArray(impSettings.headers.spoofIP.locationRules)) {
+        impSettings.headers.spoofIP.locationRules = [];
+      }
+
+      if (!impSettings.headers.spoofIP.locationMode) {
+        impSettings.headers.spoofIP.locationMode = 'include';
+      }
+
       let options = [
         ['headers.blockEtag', impSettings.headers.blockEtag, 'boolean'],
         ['headers.enableDNT', impSettings.headers.enableDNT, 'boolean'],
@@ -1230,6 +1280,8 @@ export class Chameleon {
         ['headers.spoofAcceptLang.value', impSettings.headers.spoofAcceptLang.value, languageIds.concat(['default', 'ip'])],
         ['headers.spoofIP.enabled', impSettings.headers.spoofIP.enabled, 'boolean'],
         ['headers.spoofIP.option', impSettings.headers.spoofIP.option, [0, 1]],
+        ['headers.spoofIP.customMode', impSettings.headers.spoofIP.customMode, ['range', 'location']],
+        ['headers.spoofIP.locationMode', impSettings.headers.spoofIP.locationMode, ['include', 'exclude']],
       ];
 
       for (let i = 0; i < options.length; i++) {
@@ -1258,6 +1310,22 @@ export class Chameleon {
           s.headers.spoofIP.rangeFrom = impSettings.headers.spoofIP.rangeFrom;
           s.headers.spoofIP.rangeTo = impSettings.headers.spoofIP.rangeTo;
         }
+      }
+
+      if (Array.isArray(impSettings.headers.spoofIP.locationRules)) {
+        for (let i = 0; i < impSettings.headers.spoofIP.locationRules.length; i++) {
+          let rule = impSettings.headers.spoofIP.locationRules[i];
+          if (!this.REGEX_UUID.test(rule.id) || !['include', 'exclude'].includes(rule.action)) {
+            msg = browser.i18n.getMessage('options-import-invalid-spoofIP');
+
+            return {
+              error: true,
+              msg,
+            };
+          }
+        }
+
+        s.headers.spoofIP.locationRules = impSettings.headers.spoofIP.locationRules;
       }
     }
 

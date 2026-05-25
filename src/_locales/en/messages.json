@@ -116,6 +116,71 @@
   "options-ipRules-textareaPlaceholder": {
     "message": "One IP/IP range per line"
   },
+  "options-ipRules-autofillTitle": {
+    "message": "Auto-fill from IP2Location CSV"
+  },
+  "options-ipRules-autofillWhere": {
+    "message": "Filter"
+  },
+  "options-ipRules-autofillMergeWhere": {
+    "message": "Merge gaps"
+  },
+  "options-ipRules-autofillMode": {
+    "message": "Mode"
+  },
+  "options-ipRules-autofillModeListMatch": {
+    "message": "List matching blocks"
+  },
+  "options-ipRules-autofillModeListNotMatch": {
+    "message": "List non-matching blocks"
+  },
+  "options-ipRules-autofillModeLargestMatch": {
+    "message": "Largest matching block"
+  },
+  "options-ipRules-autofillModeSmallestMatch": {
+    "message": "Smallest matching block"
+  },
+  "options-ipRules-autofillModeLargestNotMatch": {
+    "message": "Largest non-matching block"
+  },
+  "options-ipRules-autofillModeSmallestNotMatch": {
+    "message": "Smallest non-matching block"
+  },
+  "options-ipRules-autofillSort": {
+    "message": "Sort"
+  },
+  "options-ipRules-autofillSortDesc": {
+    "message": "Largest"
+  },
+  "options-ipRules-autofillSortAsc": {
+    "message": "Smallest"
+  },
+  "options-ipRules-autofillLimit": {
+    "message": "Limit"
+  },
+  "options-ipRules-autofillCSV": {
+    "message": "CSV"
+  },
+  "options-ipRules-autofillMissingWhere": {
+    "message": "Enter a filter before selecting the CSV."
+  },
+  "options-ipRules-autofillLoading": {
+    "message": "Reading CSV..."
+  },
+  "options-ipRules-autofillDone": {
+    "message": "$COUNT$ ranges added.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "options-ipRules-autofillEmpty": {
+    "message": "No ranges found."
+  },
+  "options-ipRules-autofillReadError": {
+    "message": "Could not read CSV."
+  },
   "options-modal-askDelete": {
     "message": "Are you sure you want to delete this rule?"
   },
@@ -370,6 +435,36 @@
   },
   "popup-headers-spoofIP-custom": {
     "message": "Custom IP"
+  },
+  "popup-headers-spoofIP-customModeRange": {
+    "message": "IP range"
+  },
+  "popup-headers-spoofIP-customModeLocation": {
+    "message": "Location rules"
+  },
+  "popup-headers-spoofIP-locationRule": {
+    "message": "Location"
+  },
+  "popup-headers-spoofIP-locationMode": {
+    "message": "Combination"
+  },
+  "popup-headers-spoofIP-locationModeInclude": {
+    "message": "Only included rules"
+  },
+  "popup-headers-spoofIP-locationModeExclude": {
+    "message": "All except excluded rules"
+  },
+  "popup-headers-spoofIP-locationRuleSelect": {
+    "message": "Select rule"
+  },
+  "popup-headers-spoofIP-locationRuleAction": {
+    "message": "Action"
+  },
+  "popup-headers-spoofIP-locationRuleInclude": {
+    "message": "Include"
+  },
+  "popup-headers-spoofIP-locationRuleExclude": {
+    "message": "Exclude"
   },
   "popup-headers-spoofIP-rangeFrom": {
     "message": "Range From"

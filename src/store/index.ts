@@ -30,8 +30,11 @@ export default new Vuex.Store({
       spoofIP: {
         enabled: false,
         option: 0,
+        customMode: 'range',
         rangeFrom: '',
         rangeTo: '',
+        locationMode: 'include',
+        locationRules: [],
       },
     },
     ipRules: [],

@@ -320,30 +320,100 @@
               <option value="1" v-t="'popup-headers-spoofIP-custom.message'"></option>
             </select>
           </label>
-          <div v-show="settings.headers.spoofIP.option == 1" class="flex w-full ml-6 mt-2">
-            <div class="mr-1 w-2/5">
-              <label for="headers.spoofIP.rangeFrom" v-t="'popup-headers-spoofIP-rangeFrom.message'"></label>
-              <input
-                id="spoofIPRangeFrom"
-                @input="setIPRange($event)"
-                v-model="tmp.rangeFrom"
-                name="headers.spoofIP.rangeFrom"
-                class="block w-full form-input text-mini"
-                autocomplete="off"
-                :class="{ error: errors.rangeFrom }"
-              />
+          <div v-show="settings.headers.spoofIP.option == 1" class="ml-6 mt-2">
+            <div class="flex mb-2">
+              <label class="mr-2">
+                <input
+                  @change="changeSetting($event)"
+                  :checked="settings.headers.spoofIP.customMode === 'range'"
+                  name="headers.spoofIP.customMode"
+                  value="range"
+                  type="radio"
+                  class="text-primary form-radio cursor-pointer"
+                />
+                <span class="ml-1" v-t="'popup-headers-spoofIP-customModeRange.message'"></span>
+              </label>
+              <label>
+                <input
+                  @change="changeSetting($event)"
+                  :checked="settings.headers.spoofIP.customMode === 'location'"
+                  name="headers.spoofIP.customMode"
+                  value="location"
+                  type="radio"
+                  class="text-primary form-radio cursor-pointer"
+                />
+                <span class="ml-1" v-t="'popup-headers-spoofIP-customModeLocation.message'"></span>
+              </label>
             </div>
-            <div class="ml-1 w-2/5">
-              <label for="headers.spoofIP.rangeTo" v-t="'popup-headers-spoofIP-rangeTo.message'"></label>
-              <input
-                id="spoofIPRangeTo"
-                @input="setIPRange($event)"
-                v-model="tmp.rangeTo"
-                name="headers.spoofIP.rangeTo"
-                class="block w-full form-input text-mini"
-                autocomplete="off"
-                :class="{ error: errors.rangeTo }"
-              />
+            <div v-show="settings.headers.spoofIP.customMode === 'range'" class="flex w-full">
+              <div class="mr-1 w-2/5">
+                <label for="headers.spoofIP.rangeFrom" v-t="'popup-headers-spoofIP-rangeFrom.message'"></label>
+                <input
+                  id="spoofIPRangeFrom"
+                  @input="setIPRange($event)"
+                  v-model="tmp.rangeFrom"
+                  name="headers.spoofIP.rangeFrom"
+                  class="block w-full form-input text-mini"
+                  autocomplete="off"
+                  :class="{ error: errors.rangeFrom }"
+                />
+              </div>
+              <div class="ml-1 w-2/5">
+                <label for="headers.spoofIP.rangeTo" v-t="'popup-headers-spoofIP-rangeTo.message'"></label>
+                <input
+                  id="spoofIPRangeTo"
+                  @input="setIPRange($event)"
+                  v-model="tmp.rangeTo"
+                  name="headers.spoofIP.rangeTo"
+                  class="block w-full form-input text-mini"
+                  autocomplete="off"
+                  :class="{ error: errors.rangeTo }"
+                />
+              </div>
+            </div>
+            <div v-show="settings.headers.spoofIP.customMode === 'location'" class="w-full pr-6">
+              <label class="block mb-2">
+                <span v-t="'popup-headers-spoofIP-locationMode.message'"></span>
+                <select
+                  @change="changeSetting($event)"
+                  :value="settings.headers.spoofIP.locationMode"
+                  name="headers.spoofIP.locationMode"
+                  class="form-select mt-1 w-full text-mini"
+                >
+                  <option value="include" v-t="'popup-headers-spoofIP-locationModeInclude.message'"></option>
+                  <option value="exclude" v-t="'popup-headers-spoofIP-locationModeExclude.message'"></option>
+                </select>
+              </label>
+              <div class="flex items-end">
+                <label class="w-3/5 mr-1">
+                  <span v-t="'popup-headers-spoofIP-locationRule.message'"></span>
+                  <select v-model="tmp.locationRuleId" class="form-select mt-1 w-full text-mini">
+                    <option value="" v-t="'popup-headers-spoofIP-locationRuleSelect.message'"></option>
+                    <option v-for="rule in locationRules" :key="rule.id" :value="rule.id">{{ rule.name }} ({{ rule.ips.length }})</option>
+                  </select>
+                </label>
+                <label class="w-1/4 mx-1">
+                  <span v-t="'popup-headers-spoofIP-locationRuleAction.message'"></span>
+                  <select v-model="tmp.locationRuleAction" class="form-select mt-1 w-full text-mini">
+                    <option value="include" v-t="'popup-headers-spoofIP-locationRuleInclude.message'"></option>
+                    <option value="exclude" v-t="'popup-headers-spoofIP-locationRuleExclude.message'"></option>
+                  </select>
+                </label>
+                <button @click="addLocationRule" class="fg hover:bg-primary-soft rounded px-2 py-1">
+                  <feather type="plus" size="1em"></feather>
+                </button>
+              </div>
+              <div v-if="selectedLocationRules.length" class="mt-2">
+                <div v-for="rule in selectedLocationRules" :key="rule.id + rule.action" class="flex justify-between items-center text-mini py-1">
+                  <span>
+                    {{ rule.name }}
+                    <span class="opacity-75">({{ rule.action === 'include' ? $t('popup-headers-spoofIP-locationRuleInclude.message') : $t('popup-headers-spoofIP-locationRuleExclude.message') }})</span>
+                  </span>
+                  <button @click="removeLocationRule(rule.id, rule.action)" class="px-1">
+                    <feather type="x" size="1em"></feather>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -837,6 +907,8 @@ export default class App extends Vue {
     intervalMin: '',
     rangeFrom: '',
     rangeTo: '',
+    locationRuleAction: 'include',
+    locationRuleId: '',
     store: {
       ipInfo: {
         lang: '',
@@ -846,6 +918,20 @@ export default class App extends Vue {
       screenSize: '',
     },
   };
+
+  get locationRules(): any[] {
+    return this.settings.ipRules || [];
+  }
+
+  get selectedLocationRules(): any[] {
+    return this.settings.headers.spoofIP.locationRules
+      .map(selected => {
+        let rule = this.locationRules.find(r => r.id === selected.id);
+
+        return rule ? Object.assign({}, rule, { action: selected.action }) : null;
+      })
+      .filter(rule => rule !== null);
+  }
 
   get currentProfile(): any {
     let language: string;
@@ -1186,6 +1272,38 @@ export default class App extends Vue {
       {
         name: 'headers.spoofIP.rangeTo',
         value: this.tmp.rangeTo,
+      },
+    ]);
+
+    webext.sendToBackground(this.settings);
+  }
+
+  async addLocationRule(): Promise<void> {
+    if (!this.tmp.locationRuleId) return;
+
+    let locationRules = this.settings.headers.spoofIP.locationRules.filter(rule => !(rule.id === this.tmp.locationRuleId && rule.action === this.tmp.locationRuleAction));
+    locationRules.push({
+      id: this.tmp.locationRuleId,
+      action: this.tmp.locationRuleAction,
+    });
+
+    await this['$store'].dispatch('changeSetting', [
+      {
+        name: 'headers.spoofIP.locationRules',
+        value: locationRules,
+      },
+    ]);
+
+    webext.sendToBackground(this.settings);
+  }
+
+  async removeLocationRule(id: string, action: string): Promise<void> {
+    let locationRules = this.settings.headers.spoofIP.locationRules.filter(rule => !(rule.id === id && rule.action === action));
+
+    await this['$store'].dispatch('changeSetting', [
+      {
+        name: 'headers.spoofIP.locationRules',
+        value: locationRules,
       },
     ]);
 

@@ -87,9 +87,15 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
       chameleon.settings.headers.spoofIP.enabled = request.data[0].value;
     } else if (request.data[0].name === 'headers.spoofIP.option') {
       chameleon.settings.headers.spoofIP.option = request.data[0].value;
+    } else if (request.data[0].name === 'headers.spoofIP.customMode') {
+      chameleon.settings.headers.spoofIP.customMode = request.data[0].value;
     } else if (request.data[0].name === 'headers.spoofIP.rangeFrom') {
       chameleon.settings.headers.spoofIP.rangeFrom = request.data[0].value;
       chameleon.settings.headers.spoofIP.rangeTo = request.data[1].value;
+    } else if (request.data[0].name === 'headers.spoofIP.locationMode') {
+      chameleon.settings.headers.spoofIP.locationMode = request.data[0].value;
+    } else if (request.data[0].name === 'headers.spoofIP.locationRules') {
+      chameleon.settings.headers.spoofIP.locationRules = request.data[0].value;
     }
 
     chameleon.updateSpoofIP();

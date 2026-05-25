@@ -55,7 +55,9 @@ export const changeSetting = ({ commit }, payload: any) => {
         });
       }
     }, 350);
-  } else if (['headers.spoofIP.enabled', 'headers.spoofIP.option', 'headers.spoofIP.rangeFrom'].includes(payload[0].name)) {
+  } else if (
+    ['headers.spoofIP.enabled', 'headers.spoofIP.option', 'headers.spoofIP.customMode', 'headers.spoofIP.rangeFrom', 'headers.spoofIP.locationMode', 'headers.spoofIP.locationRules'].includes(payload[0].name)
+  ) {
     browser.runtime.sendMessage({
       action: 'reloadSpoofIP',
       data: payload,

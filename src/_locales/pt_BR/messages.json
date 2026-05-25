@@ -116,6 +116,71 @@
   "options-ipRules-textareaPlaceholder": {
     "message": "Um IP/Intervalo de IP por linha"
   },
+  "options-ipRules-autofillTitle": {
+    "message": "Preencher por CSV IP2Location"
+  },
+  "options-ipRules-autofillWhere": {
+    "message": "Filtro"
+  },
+  "options-ipRules-autofillMergeWhere": {
+    "message": "Unir gaps"
+  },
+  "options-ipRules-autofillMode": {
+    "message": "Modo"
+  },
+  "options-ipRules-autofillModeListMatch": {
+    "message": "Listar blocos correspondentes"
+  },
+  "options-ipRules-autofillModeListNotMatch": {
+    "message": "Listar blocos n\u00e3o correspondentes"
+  },
+  "options-ipRules-autofillModeLargestMatch": {
+    "message": "Maior bloco correspondente"
+  },
+  "options-ipRules-autofillModeSmallestMatch": {
+    "message": "Menor bloco correspondente"
+  },
+  "options-ipRules-autofillModeLargestNotMatch": {
+    "message": "Maior bloco n\u00e3o correspondente"
+  },
+  "options-ipRules-autofillModeSmallestNotMatch": {
+    "message": "Menor bloco n\u00e3o correspondente"
+  },
+  "options-ipRules-autofillSort": {
+    "message": "Ordem"
+  },
+  "options-ipRules-autofillSortDesc": {
+    "message": "Maiores"
+  },
+  "options-ipRules-autofillSortAsc": {
+    "message": "Menores"
+  },
+  "options-ipRules-autofillLimit": {
+    "message": "Limite"
+  },
+  "options-ipRules-autofillCSV": {
+    "message": "CSV"
+  },
+  "options-ipRules-autofillMissingWhere": {
+    "message": "Informe um filtro antes de selecionar o CSV."
+  },
+  "options-ipRules-autofillLoading": {
+    "message": "Lendo CSV..."
+  },
+  "options-ipRules-autofillDone": {
+    "message": "$COUNT$ ranges adicionados.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "options-ipRules-autofillEmpty": {
+    "message": "Nenhum range encontrado."
+  },
+  "options-ipRules-autofillReadError": {
+    "message": "N\u00e3o foi poss\u00edvel ler o CSV."
+  },
   "options-modal-askDelete": {
     "message": "Tem certeza que quer excluir esta regra?"
   },
@@ -370,6 +435,36 @@
   },
   "popup-headers-spoofIP-custom": {
     "message": "IP personalizado"
+  },
+  "popup-headers-spoofIP-customModeRange": {
+    "message": "Intervalo de IP"
+  },
+  "popup-headers-spoofIP-customModeLocation": {
+    "message": "Regras de localidade"
+  },
+  "popup-headers-spoofIP-locationRule": {
+    "message": "Localidade"
+  },
+  "popup-headers-spoofIP-locationMode": {
+    "message": "Combina\u00e7\u00e3o"
+  },
+  "popup-headers-spoofIP-locationModeInclude": {
+    "message": "Somente as inclu\u00eddas"
+  },
+  "popup-headers-spoofIP-locationModeExclude": {
+    "message": "Todas exceto exclu\u00eddas"
+  },
+  "popup-headers-spoofIP-locationRuleSelect": {
+    "message": "Selecionar regra"
+  },
+  "popup-headers-spoofIP-locationRuleAction": {
+    "message": "A\u00e7\u00e3o"
+  },
+  "popup-headers-spoofIP-locationRuleInclude": {
+    "message": "Incluir"
+  },
+  "popup-headers-spoofIP-locationRuleExclude": {
+    "message": "Excluir"
   },
   "popup-headers-spoofIP-rangeFrom": {
     "message": "Intervalo De"

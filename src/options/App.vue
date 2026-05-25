@@ -245,6 +245,48 @@
                   </label>
                 </div>
                 <div>
+                  <div class="border-t border-b py-4 mb-4">
+                    <div class="mb-2" v-t="'options-ipRules-autofillTitle.message'"></div>
+                    <div class="flex flex-col md:flex-row items-center mb-2">
+                      <label class="w-full md:w-1/2 md:mr-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'options-ipRules-autofillWhere.message'"></span>
+                        <input v-model="tmp.ipRuleAutoFill.where" class="block w-full form-input" placeholder="country = Brazil" />
+                      </label>
+                      <label class="w-full md:w-1/2 md:ml-2">
+                        <span class="text-dark" v-t="'options-ipRules-autofillMergeWhere.message'"></span>
+                        <input v-model="tmp.ipRuleAutoFill.mergeWhere" class="block w-full form-input" placeholder="country IN (Argentina, Uruguay)" />
+                      </label>
+                    </div>
+                    <div class="flex flex-col md:flex-row items-center">
+                      <label class="w-full md:w-2/5 md:mr-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'options-ipRules-autofillMode.message'"></span>
+                        <select v-model="tmp.ipRuleAutoFill.mode" class="form-select mt-1 block w-full">
+                          <option value="listar_blocos_corresponde" v-t="'options-ipRules-autofillModeListMatch.message'"></option>
+                          <option value="listar_blocos_nao_corresponde" v-t="'options-ipRules-autofillModeListNotMatch.message'"></option>
+                          <option value="maior_bloco_corresponde" v-t="'options-ipRules-autofillModeLargestMatch.message'"></option>
+                          <option value="menor_bloco_corresponde" v-t="'options-ipRules-autofillModeSmallestMatch.message'"></option>
+                          <option value="maior_bloco_nao_corresponde" v-t="'options-ipRules-autofillModeLargestNotMatch.message'"></option>
+                          <option value="menor_bloco_nao_corresponde" v-t="'options-ipRules-autofillModeSmallestNotMatch.message'"></option>
+                        </select>
+                      </label>
+                      <label class="w-full md:w-1/5 md:mx-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'options-ipRules-autofillSort.message'"></span>
+                        <select v-model="tmp.ipRuleAutoFill.sortSize" class="form-select mt-1 block w-full">
+                          <option value="desc" v-t="'options-ipRules-autofillSortDesc.message'"></option>
+                          <option value="asc" v-t="'options-ipRules-autofillSortAsc.message'"></option>
+                        </select>
+                      </label>
+                      <label class="w-full md:w-1/5 md:mx-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'options-ipRules-autofillLimit.message'"></span>
+                        <input v-model.number="tmp.ipRuleAutoFill.limit" class="block w-full form-input" type="number" min="0" />
+                      </label>
+                      <label class="w-full md:w-1/5 md:ml-2">
+                        <span class="text-dark" v-t="'options-ipRules-autofillCSV.message'"></span>
+                        <input @change="readIP2LocationCSV($event)" class="block w-full text-sm" type="file" accept=".csv,text/csv" />
+                      </label>
+                    </div>
+                    <div v-if="tmp.ipRuleAutoFill.status" class="mt-2 text-sm" :class="{ error: errors.ipRuleAutoFill }">{{ tmp.ipRuleAutoFill.status }}</div>
+                  </div>
                   <div class="mb-2" v-t="'options-ipRules-textareaLabel.message'"></div>
                   <textarea
                     v-model="tmp.ipRule.ips"
@@ -447,6 +489,7 @@ import * as prof from '../lib/profiles';
 import * as tz from '../lib/tz';
 import util from '../lib/util';
 import webext from '../lib/webext';
+import { queryIP2LocationCSV } from '../lib/ip2location';
 import { Component } from 'vue-property-decorator';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -476,6 +519,7 @@ export default class App extends Vue {
   public errors: any = {
     ipRuleName: false,
     ipRuleIPs: false,
+    ipRuleAutoFill: false,
     wlRuleName: false,
     wlRuleIP: false,
     wlRuleSites: false,
@@ -497,6 +541,14 @@ export default class App extends Vue {
       lang: '',
       tz: '',
       ips: '',
+    },
+    ipRuleAutoFill: {
+      where: '',
+      mergeWhere: '',
+      mode: 'listar_blocos_corresponde',
+      sortSize: 'desc',
+      limit: 0,
+      status: '',
     },
     wlRule: {
       id: '',
@@ -806,6 +858,49 @@ export default class App extends Vue {
     };
 
     reader.readAsText((evt.target as any).files[0]);
+  }
+
+  readIP2LocationCSV(evt: Event): void {
+    let file = (evt.target as any).files[0];
+
+    if (!file) return;
+
+    if (!this.tmp.ipRuleAutoFill.where.trim()) {
+      this.errors.ipRuleAutoFill = true;
+      this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillMissingWhere.message') as string;
+      return;
+    }
+
+    this.errors.ipRuleAutoFill = false;
+    this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillLoading.message') as string;
+
+    let reader = new FileReader();
+
+    reader.onload = (e: any): void => {
+      try {
+        let ranges = queryIP2LocationCSV(e.target.result, {
+          where: this.tmp.ipRuleAutoFill.where,
+          mergeWhere: this.tmp.ipRuleAutoFill.mergeWhere,
+          mode: this.tmp.ipRuleAutoFill.mode,
+          sortSize: this.tmp.ipRuleAutoFill.sortSize,
+          limit: Number(this.tmp.ipRuleAutoFill.limit) || 0,
+        });
+
+        this.tmp.ipRule.ips = ranges.join('\n');
+        this.errors.ipRuleAutoFill = ranges.length === 0;
+        this.tmp.ipRuleAutoFill.status = this.$t(ranges.length ? 'options-ipRules-autofillDone.message' : 'options-ipRules-autofillEmpty.message', [ranges.length]) as string;
+      } catch (err) {
+        this.errors.ipRuleAutoFill = true;
+        this.tmp.ipRuleAutoFill.status = err.message || String(err);
+      }
+    };
+
+    reader.onerror = (): void => {
+      this.errors.ipRuleAutoFill = true;
+      this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillReadError.message') as string;
+    };
+
+    reader.readAsText(file);
   }
 
   reallyDelete(): void {
