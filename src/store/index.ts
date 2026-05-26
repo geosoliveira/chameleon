@@ -45,6 +45,10 @@ export default new Vuex.Store({
         min: 1,
         max: 1,
       },
+      floatingButton: {
+        enabled: false,
+        reloadTab: true,
+      },
       showProfileOnIcon: true,
     },
     options: {

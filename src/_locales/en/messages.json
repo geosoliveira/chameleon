@@ -388,6 +388,15 @@
   "popup-profile-showProfileOnIcon": {
     "message": "Show browser profile on icon"
   },
+  "popup-profile-floatingButton": {
+    "message": "Show floating profile change button"
+  },
+  "popup-profile-floatingButtonReloadTab": {
+    "message": "Reload active tab after floating change"
+  },
+  "floating-profile-button-title": {
+    "message": "Change Chameleon profile"
+  },
   "popup-headers": {
     "message": "Headers"
   },

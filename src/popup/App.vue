@@ -127,6 +127,33 @@
             <span class="ml-1" v-t="'popup-profile-showProfileOnIcon.message'"></span>
           </label>
         </div>
+        <div class="flex items-center mt-2">
+          <label class="cursor-pointer">
+            <input
+              id="floatingProfileButton"
+              @change="changeSetting($event)"
+              :checked="settings.profile.floatingButton.enabled"
+              name="profile.floatingButton.enabled"
+              type="checkbox"
+              class="text-primary form-checkbox cursor-pointer"
+            />
+            <span class="ml-1" v-t="'popup-profile-floatingButton.message'"></span>
+          </label>
+        </div>
+        <div class="flex items-center mt-2 ml-6" :class="{ 'opacity-50': !settings.profile.floatingButton.enabled }">
+          <label class="cursor-pointer">
+            <input
+              id="floatingProfileButtonReloadTab"
+              @change="changeSetting($event)"
+              :checked="settings.profile.floatingButton.reloadTab"
+              name="profile.floatingButton.reloadTab"
+              type="checkbox"
+              class="text-primary form-checkbox cursor-pointer"
+              :disabled="!settings.profile.floatingButton.enabled"
+            />
+            <span class="ml-1" v-t="'popup-profile-floatingButtonReloadTab.message'"></span>
+          </label>
+        </div>
         <div class="mb-2" v-show="!/\d|none/.test(settings.profile.selected)">
           <div class="flex items-center">
             <label class="w-full mt-2">
@@ -1366,6 +1393,16 @@ export default class App extends Vue {
   async toggleChameleon() {
     await this['$store'].dispatch('toggleChameleon', !this.settings.config.enabled);
     webext.sendToBackground(this.settings);
+
+    browser.runtime.sendMessage({
+      action: 'syncFloatingProfileButton',
+      data: [
+        {
+          name: 'config.enabled',
+          value: this.settings.config.enabled,
+        },
+      ],
+    });
 
     browser.runtime.sendMessage({
       action: 'reloadInjectionScript',

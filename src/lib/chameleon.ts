@@ -236,6 +236,17 @@ export class Chameleon {
       delete this.settings.settings;
     }
 
+    if (!this.settings.profile.floatingButton) {
+      this.settings.profile.floatingButton = {
+        enabled: false,
+        reloadTab: true,
+      };
+    }
+
+    if (typeof this.settings.profile.floatingButton.reloadTab !== 'boolean') {
+      this.settings.profile.floatingButton.reloadTab = true;
+    }
+
     // updated whitelist options introduced in v0.22
     let newOptions = ['audioContext', 'clientRects', 'cssExfil', 'mediaDevices'];
 
@@ -746,6 +757,16 @@ export class Chameleon {
     this.saveSettings(this.defaultSettings);
   }
 
+  public getFloatingProfileButtonSettings(): object {
+    return {
+      enabled:
+        this.settings.config.enabled &&
+        this.settings.profile.floatingButton.enabled &&
+        (this.settings.profile.selected.includes('random') || ['windows', 'macOS', 'linux', 'iOS', 'android'].includes(this.settings.profile.selected)),
+      reloadTab: this.settings.profile.floatingButton.reloadTab,
+    };
+  }
+
   public run(): void {
     this.start();
 
@@ -1224,11 +1245,20 @@ export class Chameleon {
         impSettings.profile.selected = this.FF_PROFILES[impSettings.profile.selected];
       }
 
+      if (!impSettings.profile.floatingButton) {
+        impSettings.profile.floatingButton = {
+          enabled: false,
+          reloadTab: true,
+        };
+      }
+
       let options = [
         ['profile.selected', impSettings.profile.selected, profileIds.concat(['none', 'random', 'randomDesktop', 'randomMobile', 'windows', 'macOS', 'linux', 'iOS', 'android'])],
         ['profile.interval.option', impSettings.profile.interval.option, [0, -1, 1, 5, 10, 20, 30, 40, 50, 60]],
         ['profile.interval.min', impSettings.profile.interval.min, 'number'],
         ['profile.interval.max', impSettings.profile.interval.max, 'number'],
+        ['profile.floatingButton.enabled', impSettings.profile.floatingButton.enabled, 'boolean'],
+        ['profile.floatingButton.reloadTab', impSettings.profile.floatingButton.reloadTab, 'boolean'],
       ];
 
       for (let i = 0; i < options.length; i++) {

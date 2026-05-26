@@ -31,6 +31,44 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
     chameleon.toggleContextMenu(request.data);
   } else if (request.action === 'toggleBadgeText') {
     chameleon.updateBadgeText(request.data);
+  } else if (request.action === 'syncFloatingProfileButton') {
+    for (let i = 0; i < request.data.length; i++) {
+      let keys = request.data[i].name.split('.');
+      let beforeLast = keys.slice(0, -1).reduce((o, key) => o[key], chameleon.settings);
+      beforeLast[keys.slice(-1).pop()] = request.data[i].value;
+    }
+
+    browser.tabs.query({}, tabs => {
+      for (let i = 0; i < tabs.length; i++) {
+        browser.tabs.sendMessage(
+          tabs[i].id,
+          {
+            action: 'floatingProfileButtonSettings',
+            data: chameleon.getFloatingProfileButtonSettings(),
+          },
+          () => {
+            if (browser.runtime.lastError) return;
+          }
+        );
+      }
+    });
+    sendResponse('done');
+  } else if (request.action === 'getFloatingProfileButtonSettings') {
+    sendResponse(chameleon.getFloatingProfileButtonSettings());
+  } else if (request.action === 'floatingProfileChange') {
+    let floatingSettings = chameleon.getFloatingProfileButtonSettings() as any;
+    if (!floatingSettings.enabled) {
+      sendResponse('disabled');
+      return true;
+    }
+
+    chameleon.run();
+
+    if (chameleon.settings.profile.floatingButton.reloadTab && sender.tab && sender.tab.id) {
+      browser.tabs.reload(sender.tab.id);
+    }
+
+    sendResponse('done');
   } else if (request.action === 'getSettings') {
     (async () => {
       if (!!browser.privacy) {
@@ -115,6 +153,20 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
 
     // reset interval timer and send notification
     chameleon.setTimer();
+    browser.tabs.query({}, tabs => {
+      for (let i = 0; i < tabs.length; i++) {
+        browser.tabs.sendMessage(
+          tabs[i].id,
+          {
+            action: 'floatingProfileButtonSettings',
+            data: chameleon.getFloatingProfileButtonSettings(),
+          },
+          () => {
+            if (browser.runtime.lastError) return;
+          }
+        );
+      }
+    });
     sendResponse('done');
   } else if (request.action === 'updateWhitelist') {
     chameleon.settings.whitelist = request.data;

@@ -25,6 +25,11 @@ export const changeSetting = ({ commit }, payload: any) => {
       action: 'toggleBadgeText',
       data: payload[0].value,
     });
+  } else if (['profile.floatingButton.enabled', 'profile.floatingButton.reloadTab'].includes(payload[0].name)) {
+    browser.runtime.sendMessage({
+      action: 'syncFloatingProfileButton',
+      data: payload,
+    });
   } else if (
     [
       'headers.spoofAcceptLang.enabled',

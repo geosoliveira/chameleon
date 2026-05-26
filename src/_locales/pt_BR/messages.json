@@ -388,6 +388,15 @@
   "popup-profile-showProfileOnIcon": {
     "message": "Mostrar o perfil do navegador no ícone"
   },
+  "popup-profile-floatingButton": {
+    "message": "Mostrar bot\u00e3o flutuante para trocar perfil"
+  },
+  "popup-profile-floatingButtonReloadTab": {
+    "message": "Recarregar aba ativa ap\u00f3s troca pelo bot\u00e3o"
+  },
+  "floating-profile-button-title": {
+    "message": "Trocar perfil do Chameleon"
+  },
   "popup-headers": {
     "message": "Cabeçalhos"
   },
