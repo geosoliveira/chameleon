@@ -200,7 +200,10 @@ class Parser {
     field = normalize(field);
     if (!FIELDS.includes(field)) throw new Error(`Invalid field: ${field}`);
 
-    if (operator.toUpperCase() === 'IN') {
+    let normalizedOperator = operator.toUpperCase();
+    let negatedIn = normalizedOperator === 'NOT' && this.accept('IN');
+
+    if (normalizedOperator === 'IN' || negatedIn) {
       if (!this.accept('(')) throw new Error("Expected '(' after IN.");
       let values: string[] = [];
       let current: string[] = [];
@@ -219,7 +222,8 @@ class Parser {
       }
 
       if (!values.length) throw new Error('Empty IN list.');
-      return ['IN', field, values];
+      let node = ['IN', field, values];
+      return negatedIn ? ['NOT', node] : node;
     }
 
     if (!['=', '!=', '<>'].includes(operator)) throw new Error(`Invalid operator after ${field}.`);
