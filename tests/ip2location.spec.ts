@@ -33,4 +33,8 @@ describe('IP2Location SQL-like filters', () => {
       '0.0.0.10-0.0.0.19',
     ]);
   });
+
+  test('supports English macro aliases', () => {
+    expect(query('macro = latin america')).toEqual(['0.0.0.0-0.0.0.19', '0.0.0.30-0.0.0.39']);
+  });
 });

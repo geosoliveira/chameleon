@@ -20,7 +20,7 @@
         <feather type="settings" size="1.25em"></feather>
       </div>
     </div>
-    <div class="flex-grow flex-col w-full justify-around">
+    <div class="flex-grow flex-col w-full justify-around h-screen overflow-y-auto">
       <div v-show="isSelected('tab', 'main')">
         <div class="text-center mt-8">
           <div class="my-4 h-20">
@@ -398,25 +398,13 @@
                 />
               </div>
             </div>
-            <div v-show="settings.headers.spoofIP.customMode === 'location'" class="w-full pr-6">
-              <label class="block mb-2">
-                <span v-t="'popup-headers-spoofIP-locationMode.message'"></span>
-                <select
-                  @change="changeSetting($event)"
-                  :value="settings.headers.spoofIP.locationMode"
-                  name="headers.spoofIP.locationMode"
-                  class="form-select mt-1 w-full text-mini"
-                >
-                  <option value="include" v-t="'popup-headers-spoofIP-locationModeInclude.message'"></option>
-                  <option value="exclude" v-t="'popup-headers-spoofIP-locationModeExclude.message'"></option>
-                </select>
-              </label>
+            <div v-show="settings.headers.spoofIP.customMode === 'location'" class="w-full pr-6 pb-4">
               <div class="flex items-end">
                 <label class="w-3/5 mr-1">
                   <span v-t="'popup-headers-spoofIP-locationRule.message'"></span>
                   <select v-model="tmp.locationRuleId" class="form-select mt-1 w-full text-mini">
                     <option value="" v-t="'popup-headers-spoofIP-locationRuleSelect.message'"></option>
-                    <option v-for="rule in locationRules" :key="rule.id" :value="rule.id">{{ rule.name }} ({{ rule.ips.length }})</option>
+                    <option v-for="rule in locationRuleChoices" :key="rule.id" :value="rule.id">{{ locationRuleLabel(rule) }}</option>
                   </select>
                 </label>
                 <label class="w-1/4 mx-1">
@@ -433,7 +421,7 @@
               <div v-if="selectedLocationRules.length" class="mt-2">
                 <div v-for="rule in selectedLocationRules" :key="rule.id + rule.action" class="flex justify-between items-center text-mini py-1">
                   <span>
-                    {{ rule.name }}
+                    {{ rule.name }}<span v-if="rule.id !== allIPRuleId"> ({{ rule.ips.length }})</span>
                     <span class="opacity-75">({{ rule.action === 'include' ? $t('popup-headers-spoofIP-locationRuleInclude.message') : $t('popup-headers-spoofIP-locationRuleExclude.message') }})</span>
                   </span>
                   <button @click="removeLocationRule(rule.id, rule.action)" class="px-1">
@@ -904,8 +892,11 @@ import * as tz from '../lib/tz';
 import util from '../lib/util';
 import webext from '../lib/webext';
 
+const ALL_IP_RULE_ID = '__all__';
+
 @Component
 export default class App extends Vue {
+  public allIPRuleId: string = ALL_IP_RULE_ID;
   public currentTab: string = 'main';
   public currentProfileGroup: string = '';
   public currentOption: string = 'injection';
@@ -950,10 +941,20 @@ export default class App extends Vue {
     return this.settings.ipRules || [];
   }
 
+  get locationRuleChoices(): any[] {
+    return [
+      {
+        id: ALL_IP_RULE_ID,
+        name: this.$t('popup-headers-spoofIP-locationRuleAll.message'),
+        ips: ['ALL'],
+      },
+    ].concat(this.locationRules);
+  }
+
   get selectedLocationRules(): any[] {
     return this.settings.headers.spoofIP.locationRules
       .map(selected => {
-        let rule = this.locationRules.find(r => r.id === selected.id);
+        let rule = this.locationRuleChoices.find(r => r.id === selected.id);
 
         return rule ? Object.assign({}, rule, { action: selected.action }) : null;
       })
@@ -1222,6 +1223,10 @@ export default class App extends Vue {
     if (!/\d/.test(profileId)) {
       return this.profileListing.every(p => p.excluded);
     }
+  }
+
+  locationRuleLabel(rule: any): string {
+    return rule.id === ALL_IP_RULE_ID ? rule.name : `${rule.name} (${rule.ips.length})`;
   }
 
   isSelected(type: string, value: string): boolean {

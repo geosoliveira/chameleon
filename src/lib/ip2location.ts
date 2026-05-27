@@ -15,22 +15,6 @@ interface QueryOptions {
   limit: number;
 }
 
-const MACRO_REGIONS: { [key: string]: string[] } = {
-  oceania: ['AU', 'NZ', 'FJ', 'PG', 'NC'],
-  'asia oriental': ['CN', 'JP', 'KR', 'KP', 'TW', 'HK', 'MO', 'MN'],
-  'sudeste asiatico': ['ID', 'MY', 'PH', 'SG', 'TH', 'VN', 'KH', 'LA', 'MM', 'BN', 'TL'],
-  'asia meridional': ['IN', 'PK', 'BD', 'LK', 'NP', 'BT', 'MV', 'AF'],
-  'asia central': ['KZ', 'UZ', 'TM', 'KG', 'TJ'],
-  'oriente medio': ['SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'IR', 'IQ', 'IL', 'JO', 'LB', 'SY', 'YE', 'TR'],
-  europa: ['PT', 'ES', 'FR', 'DE', 'IT', 'NL', 'BE', 'CH', 'AT', 'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'SE', 'NO', 'FI', 'DK', 'IE', 'GB', 'UA', 'RU'],
-  'america latina': ['BR', 'AR', 'CL', 'UY', 'PY', 'BO', 'PE', 'CO', 'VE', 'EC', 'MX', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'CU', 'DO', 'HT'],
-  'america do norte': ['US', 'CA', 'MX'],
-  'africa norte': ['MA', 'DZ', 'TN', 'LY', 'EG', 'SD'],
-  'africa sul': ['ZA', 'NA', 'BW', 'ZW', 'MZ', 'LS', 'SZ'],
-};
-
-const FIELDS = ['country_code', 'country', 'region', 'city', 'macro', 'any'];
-
 let normalize = (value: string): string => {
   return value
     .trim()
@@ -38,6 +22,39 @@ let normalize = (value: string): string => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 };
+
+const MACRO_REGION_DEFINITIONS = [
+  { key: 'oceania', labels: ['oceania'], countries: ['AU', 'NZ', 'FJ', 'PG', 'NC'] },
+  { key: 'east_asia', labels: ['asia oriental', 'east asia'], countries: ['CN', 'JP', 'KR', 'KP', 'TW', 'HK', 'MO', 'MN'] },
+  { key: 'southeast_asia', labels: ['sudeste asiatico', 'southeast asia'], countries: ['ID', 'MY', 'PH', 'SG', 'TH', 'VN', 'KH', 'LA', 'MM', 'BN', 'TL'] },
+  { key: 'south_asia', labels: ['asia meridional', 'south asia'], countries: ['IN', 'PK', 'BD', 'LK', 'NP', 'BT', 'MV', 'AF'] },
+  { key: 'central_asia', labels: ['asia central', 'central asia'], countries: ['KZ', 'UZ', 'TM', 'KG', 'TJ'] },
+  { key: 'middle_east', labels: ['oriente medio', 'middle east'], countries: ['SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'IR', 'IQ', 'IL', 'JO', 'LB', 'SY', 'YE', 'TR'] },
+  { key: 'europe', labels: ['europa', 'europe'], countries: ['PT', 'ES', 'FR', 'DE', 'IT', 'NL', 'BE', 'CH', 'AT', 'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'SE', 'NO', 'FI', 'DK', 'IE', 'GB', 'UA', 'RU'] },
+  { key: 'latin_america', labels: ['america latina', 'latin america'], countries: ['BR', 'AR', 'CL', 'UY', 'PY', 'BO', 'PE', 'CO', 'VE', 'EC', 'MX', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'CU', 'DO', 'HT'] },
+  { key: 'north_america', labels: ['america do norte', 'north america'], countries: ['US', 'CA', 'MX'] },
+  { key: 'north_africa', labels: ['africa norte', 'north africa'], countries: ['MA', 'DZ', 'TN', 'LY', 'EG', 'SD'] },
+  { key: 'southern_africa', labels: ['africa sul', 'southern africa'], countries: ['ZA', 'NA', 'BW', 'ZW', 'MZ', 'LS', 'SZ'] },
+];
+
+const MACRO_REGIONS: { [key: string]: string[] } = MACRO_REGION_DEFINITIONS.reduce((macros, macro) => {
+  macro.labels.forEach(label => {
+    macros[normalize(label)] = macro.countries;
+  });
+
+  return macros;
+}, {});
+
+export let getMacroRegions = (locale: string = 'en'): any[] => {
+  let usePortuguese = /^pt/i.test(locale);
+
+  return MACRO_REGION_DEFINITIONS.map(macro => ({
+    value: macro.labels[usePortuguese ? 0 : 1] || macro.labels[0],
+    countries: macro.countries,
+  }));
+};
+
+const FIELDS = ['country_code', 'country', 'region', 'city', 'macro', 'any'];
 
 let intToIP = (value: number): string => {
   return (value >>> 24) + '.' + ((value >> 16) & 255) + '.' + ((value >> 8) & 255) + '.' + (value & 255);

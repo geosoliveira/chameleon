@@ -71,6 +71,10 @@ let generateIP = (): string => {
 };
 
 let getIPRange = (ipRange: string): string => {
+  if (isAllIPRange(ipRange)) {
+    return 'ALL';
+  }
+
   let range: any = cidr.range(ipRange);
 
   if (range === null) {
@@ -81,6 +85,10 @@ let getIPRange = (ipRange: string): string => {
 };
 
 let ipInRange = (ip: string, range: string): boolean => {
+  if (range.length === 1 && isAllIPRange(range[0])) {
+    return true;
+  }
+
   if (range.length === 1) {
     return ip === range[0];
   } else {
@@ -105,6 +113,10 @@ let ipToString = (ip: number): string => {
 };
 
 let parseIPRange = (range: string): number[] | null => {
+  if (isAllIPRange(range)) {
+    return [0, 4294967295];
+  }
+
   let parts: string[] = range.split('-').map(part => part.trim());
 
   if (parts.length === 1 && isValidIP(parts[0])) {
@@ -218,6 +230,10 @@ let isValidIP = (ip: string): boolean => {
   );
 };
 
+let isAllIPRange = (range: string): boolean => {
+  return range.trim().toUpperCase() === 'ALL';
+};
+
 let parseURL = (url: string): any => {
   let u = new URL(url);
   let uParsed = psl.parse(u.hostname);
@@ -249,6 +265,7 @@ export default {
   ipToInt,
   ipToString,
   isInternalIP,
+  isAllIPRange,
   isValidIP,
   isValidURL,
   parseURL,

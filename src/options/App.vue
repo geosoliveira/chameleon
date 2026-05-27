@@ -285,6 +285,14 @@
                         <input @change="readIP2LocationCSV($event)" class="block w-full text-sm" type="file" accept=".csv,text/csv" />
                       </label>
                     </div>
+                    <div class="mt-3 text-sm">
+                      <div class="mb-1" v-t="'options-ipRules-autofillMacros.message'"></div>
+                      <div class="flex flex-wrap gap-2">
+                        <span v-for="macro in macroRegions" :key="macro.value" class="px-2 py-1 bg-gray-200 text-gray-800 rounded-sm" :title="macro.countries.join(', ')">
+                          {{ macro.value }}
+                        </span>
+                      </div>
+                    </div>
                     <div v-if="tmp.ipRuleAutoFill.status" class="mt-2 text-sm" :class="{ error: errors.ipRuleAutoFill }">{{ tmp.ipRuleAutoFill.status }}</div>
                   </div>
                   <div class="mb-2" v-t="'options-ipRules-textareaLabel.message'"></div>
@@ -489,7 +497,7 @@ import * as prof from '../lib/profiles';
 import * as tz from '../lib/tz';
 import util from '../lib/util';
 import webext from '../lib/webext';
-import { queryIP2LocationCSV } from '../lib/ip2location';
+import { getMacroRegions, queryIP2LocationCSV } from '../lib/ip2location';
 import { Component } from 'vue-property-decorator';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -587,6 +595,10 @@ export default class App extends Vue {
 
   get profileList(): prof.ProfileListItem[] {
     return [].concat.apply([], Object.values(this.profiles));
+  }
+
+  get macroRegions(): any[] {
+    return getMacroRegions(browser.i18n.getUILanguage());
   }
 
   get settings(): any {
@@ -970,7 +982,9 @@ export default class App extends Vue {
     for (let i = 0; i < rules.length; i++) {
       let isValid: boolean = false;
       let ip = rules[i].split('-');
-      if (ip.length === 1) {
+      if (util.isAllIPRange(rules[i])) {
+        isValid = true;
+      } else if (ip.length === 1) {
         isValid = util.validateIPRange('0.0.0.0', ip[0]);
       } else if (ip.length === 2) {
         isValid = util.validateIPRange(ip[0], ip[1]);

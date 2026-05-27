@@ -161,6 +161,9 @@
   "options-ipRules-autofillCSV": {
     "message": "CSV"
   },
+  "options-ipRules-autofillMacros": {
+    "message": "Macros dispon\u00edveis"
+  },
   "options-ipRules-autofillMissingWhere": {
     "message": "Informe um filtro antes de selecionar o CSV."
   },
@@ -465,6 +468,9 @@
   },
   "popup-headers-spoofIP-locationRuleSelect": {
     "message": "Selecionar regra"
+  },
+  "popup-headers-spoofIP-locationRuleAll": {
+    "message": "Todos os IPs"
   },
   "popup-headers-spoofIP-locationRuleAction": {
     "message": "A\u00e7\u00e3o"

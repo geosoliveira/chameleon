@@ -7,6 +7,9 @@ import webext from './webext';
 import { Interceptor } from './intercept';
 import { v4 as uuidv4 } from 'uuid';
 
+const ALL_IP_RULE_ID = '__all__';
+const ALL_IP_RANGE = 'ALL';
+
 enum IntervalOption {
   None = 0,
   Custom = -1,
@@ -214,6 +217,17 @@ export class Chameleon {
 
     if (!Array.isArray(this.settings.headers.spoofIP.locationRules)) {
       this.settings.headers.spoofIP.locationRules = [];
+    }
+
+    if (this.settings.headers.spoofIP.locationMode === 'exclude' && !this.settings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')) {
+      this.settings.headers.spoofIP.locationRules.unshift({
+        id: ALL_IP_RULE_ID,
+        action: 'include',
+      });
+    }
+
+    if (this.settings.headers.spoofIP.locationMode === 'exclude') {
+      this.settings.headers.spoofIP.locationMode = 'include';
     }
 
     if (!['include', 'exclude'].includes(this.settings.headers.spoofIP.locationMode)) {
@@ -1016,17 +1030,23 @@ export class Chameleon {
       if (this.settings.headers.spoofIP.option === SpoofIPOption.Random) {
         this.tempStore.spoofIP = util.generateIP();
       } else if (this.settings.headers.spoofIP.customMode === 'location') {
-        let includeRanges: string[] = this.settings.headers.spoofIP.locationMode === 'exclude' ? this.settings.ipRules.reduce((ranges, rule) => ranges.concat(rule.ips), []) : [];
+        let includeRanges: string[] = [];
         let excludeRanges: string[] = [];
 
         for (let i = 0; i < this.settings.headers.spoofIP.locationRules.length; i++) {
-          let selectedRule = this.settings.ipRules.find(r => r.id === this.settings.headers.spoofIP.locationRules[i].id);
+          let locationRule = this.settings.headers.spoofIP.locationRules[i];
+          let ranges = locationRule.id === ALL_IP_RULE_ID ? [ALL_IP_RANGE] : [];
+          let selectedRule = this.settings.ipRules.find(r => r.id === locationRule.id);
 
           if (selectedRule) {
-            if (this.settings.headers.spoofIP.locationRules[i].action === 'exclude') {
-              excludeRanges = excludeRanges.concat(selectedRule.ips);
-            } else if (this.settings.headers.spoofIP.locationMode === 'include') {
-              includeRanges = includeRanges.concat(selectedRule.ips);
+            ranges = selectedRule.ips;
+          }
+
+          if (ranges.length) {
+            if (locationRule.action === 'exclude') {
+              excludeRanges = excludeRanges.concat(ranges);
+            } else {
+              includeRanges = includeRanges.concat(ranges);
             }
           }
         }
@@ -1219,7 +1239,10 @@ export class Chameleon {
         for (let j = 0; j < impSettings.ipRules[i].ips.length; j++) {
           let ipRange: string[] = impSettings.ipRules[i].ips[j].split('-');
 
-          if (ipRange.length > 2 || (ipRange.length === 2 && !util.validateIPRange(ipRange[0], ipRange[1])) || (ipRange.length === 1 && !util.isValidIP(ipRange[0]))) {
+          if (
+            !util.isAllIPRange(impSettings.ipRules[i].ips[j]) &&
+            (ipRange.length > 2 || (ipRange.length === 2 && !util.validateIPRange(ipRange[0], ipRange[1])) || (ipRange.length === 1 && !util.isValidIP(ipRange[0])))
+          ) {
             msg = browser.i18n.getMessage('options-import-invalid-ipRuleRange');
 
             return {
@@ -1300,6 +1323,17 @@ export class Chameleon {
         impSettings.headers.spoofIP.locationMode = 'include';
       }
 
+      if (impSettings.headers.spoofIP.locationMode === 'exclude' && !impSettings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')) {
+        impSettings.headers.spoofIP.locationRules.unshift({
+          id: ALL_IP_RULE_ID,
+          action: 'include',
+        });
+      }
+
+      if (impSettings.headers.spoofIP.locationMode === 'exclude') {
+        impSettings.headers.spoofIP.locationMode = 'include';
+      }
+
       let options = [
         ['headers.blockEtag', impSettings.headers.blockEtag, 'boolean'],
         ['headers.enableDNT', impSettings.headers.enableDNT, 'boolean'],
@@ -1345,7 +1379,7 @@ export class Chameleon {
       if (Array.isArray(impSettings.headers.spoofIP.locationRules)) {
         for (let i = 0; i < impSettings.headers.spoofIP.locationRules.length; i++) {
           let rule = impSettings.headers.spoofIP.locationRules[i];
-          if (!this.REGEX_UUID.test(rule.id) || !['include', 'exclude'].includes(rule.action)) {
+          if ((rule.id !== ALL_IP_RULE_ID && !this.REGEX_UUID.test(rule.id)) || !['include', 'exclude'].includes(rule.action)) {
             msg = browser.i18n.getMessage('options-import-invalid-spoofIP');
 
             return {
