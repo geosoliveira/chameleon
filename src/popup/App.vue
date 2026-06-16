@@ -59,11 +59,19 @@
             <div>{{ currentProfile.lang }}</div>
           </div>
           <div class="flex flex-col gap-y-2">
-            <div v-show="isRandomProfile" class="flex justify-center text-sm">
+            <div class="flex justify-center text-sm">
+              <div id="saveCurrentProfile" @click="saveCurrentProfile" class="rounded-lg cursor-pointer fg">
+                <div class="flex items-center px-2 py-1">
+                  <feather type="save" size="1em"></feather>
+                  <span class="ml-2" v-t="'popup-home-saveCurrentProfile.message'"></span>
+                </div>
+              </div>
+            </div>
+            <div v-show="canUseChangeProfileButton" class="flex justify-center text-sm">
               <div id="changeProfile" @click="changeProfile" class="rounded-lg cursor-pointer fg">
                 <div class="flex items-center px-2 py-1">
                   <feather type="refresh-cw" size="1em"></feather>
-                  <span class="ml-2" v-t="'popup-home-change.message'"></span>
+                  <span class="ml-2">{{ changeProfileButtonLabel }}</span>
                 </div>
               </div>
             </div>
@@ -111,6 +119,33 @@
                 :checked="isSelected('profile', 'randomMobile')"
               />
               <span class="ml-2" v-t="'popup-profile-randomMobileProfile.message'"></span>
+            </label>
+          </div>
+        </div>
+        <div v-show="settings.savedProfiles.length" class="mt-4">
+          <div class="text-base border-primary border-b-2 mb-3" v-t="'text-savedProfiles.message'"></div>
+          <div class="profile-item fg">
+            <label class="flex items-center cursor-pointer">
+              <input
+                id="randomSavedProfiles"
+                @click="setSelected('profile', 'randomSaved')"
+                :checked="isSelected('profile', 'randomSaved')"
+                type="radio"
+                class="form-radio cursor-pointer"
+              />
+              <span class="ml-2" v-t="'popup-profile-randomSavedProfiles.message'"></span>
+            </label>
+          </div>
+          <div v-for="p in settings.savedProfiles" :key="p.id" class="profile-item fg">
+            <label class="flex items-center cursor-pointer">
+              <input
+                :id="`saved-${p.id}`"
+                @click="setSelected('profile', `saved:${p.id}`)"
+                :checked="isSelected('profile', `saved:${p.id}`)"
+                type="radio"
+                class="form-radio cursor-pointer"
+              />
+              <span class="ml-2">{{ p.name }}</span>
             </label>
           </div>
         </div>
@@ -316,6 +351,7 @@
               class="form-select mt-1 w-full text-mini"
             >
               <option value="ip">IP</option>
+              <option value="ipRule" v-t="'text-ipRule.message'"></option>
               <option value="default" v-t="'text-default.message'"></option>
               <option v-for="l in languages" :value="l.code" :key="l.code">{{ l.name }}</option>
             </select>
@@ -346,6 +382,28 @@
               <option value="0" v-t="'popup-headers-spoofIP-random.message'"></option>
               <option value="1" v-t="'popup-headers-spoofIP-custom.message'"></option>
             </select>
+          </label>
+          <label class="ml-6 mt-2 cursor-pointer">
+            <input
+              id="spoofIPPreserveOnProfileChange"
+              @change="changeSetting($event)"
+              :checked="settings.headers.spoofIP.preserveOnProfileChange"
+              name="headers.spoofIP.preserveOnProfileChange"
+              type="checkbox"
+              class="text-primary form-checkbox cursor-pointer"
+            />
+            <span class="ml-1" v-t="'popup-headers-spoofIP-preserveOnProfileChange.message'"></span>
+          </label>
+          <label class="ml-6 mt-2 cursor-pointer">
+            <input
+              id="spoofIPRotateOnlyOnProfileChange"
+              @change="changeSetting($event)"
+              :checked="settings.headers.spoofIP.rotateOnlyOnProfileChange"
+              name="headers.spoofIP.rotateOnlyOnProfileChange"
+              type="checkbox"
+              class="text-primary form-checkbox cursor-pointer"
+            />
+            <span class="ml-1" v-t="'popup-headers-spoofIP-rotateOnlyOnProfileChange.message'"></span>
           </label>
           <div v-show="settings.headers.spoofIP.option == 1" class="ml-6 mt-2">
             <div class="flex mb-2">
@@ -645,23 +703,37 @@
                   <span v-t="'popup-options-injection-screen.message'"></span>
                   <select
                     id="screenSize"
-                    @change="changeSetting($event)"
-                    :value="settings.options.screenSize"
+                    @change="setScreenSize($event)"
+                    :value="screenSizeSelectValue"
                     name="options.screenSize"
                     class="form-select mt-1 block w-full text-mini"
                   >
                     <option value="default" v-t="'text-default.message'"></option>
                     <option value="profile" v-t="'text-profile.message'"></option>
-                    <option value="1366x768">1366x768</option>
-                    <option value="1440x900">1440x900</option>
-                    <option value="1600x900">1600x900</option>
-                    <option value="1920x1080">1920x1080</option>
-                    <option value="1920x1200">1920x1200</option>
-                    <option value="2560x1440">2560x1440</option>
-                    <option value="2560x1600">2560x1600</option>
-                    <option value="3840x2160">3840x2160</option>
-                    <option value="4096x2304">4096x2304</option>
-                    <option value="5120x2880">5120x2880</option>
+                    <option v-for="size in screenSizePresets" :key="size" :value="size">{{ size }}</option>
+                    <option value="custom" v-t="'popup-options-injection-screenCustom.message'"></option>
+                  </select>
+                  <input
+                    v-show="screenSizeSelectValue === 'custom'"
+                    id="screenSizeCustom"
+                    @input="setCustomScreenSize($event)"
+                    v-model="tmp.screenSizeCustom"
+                    :class="{ error: errors.screenSize }"
+                    name="options.screenSize"
+                    class="block w-full form-input text-mini mt-2"
+                    autocomplete="off"
+                    placeholder="390x844"
+                  />
+                  <select
+                    v-show="settings.options.screenSize !== 'default'"
+                    id="screenSizeMode"
+                    @change="changeSetting($event)"
+                    :value="settings.options.screenSizeMode"
+                    name="options.screenSizeMode"
+                    class="form-select mt-2 block w-full text-mini"
+                  >
+                    <option value="screen" v-t="'popup-options-injection-screenModeScreen.message'"></option>
+                    <option value="screenAndWindow" v-t="'popup-options-injection-screenModeScreenAndWindow.message'"></option>
                   </select>
                 </label>
               </div>
@@ -671,6 +743,7 @@
                   <select id="timeZone" @change="changeSetting($event)" :value="settings.options.timeZone" name="options.timeZone" class="form-select mt-1 block w-full text-mini">
                     <option value="default" v-t="'text-default.message'"></option>
                     <option value="ip">IP</option>
+                    <option value="ipRule" v-t="'text-ipRule.message'"></option>
                     <option v-for="t in timezones" :key="t.zone" :value="t.zone">({{ t.offset }}) {{ t.zone }}</option>
                   </select>
                 </label>
@@ -893,6 +966,28 @@ import util from '../lib/util';
 import webext from '../lib/webext';
 
 const ALL_IP_RULE_ID = '__all__';
+const SCREEN_SIZE_PRESETS = [
+  '320x568',
+  '360x640',
+  '375x667',
+  '390x844',
+  '414x896',
+  '768x1024',
+  '800x600',
+  '1024x768',
+  '1280x720',
+  '1280x800',
+  '1366x768',
+  '1440x900',
+  '1600x900',
+  '1920x1080',
+  '1920x1200',
+  '2560x1440',
+  '2560x1600',
+  '3840x2160',
+  '4096x2304',
+  '5120x2880',
+];
 
 @Component
 export default class App extends Vue {
@@ -914,25 +1009,31 @@ export default class App extends Vue {
     intervalMin: false,
     rangeFrom: false,
     rangeTo: false,
+    screenSize: false,
   };
   public hasPrivacyPermission: boolean = !!browser.privacy;
   public languages: lang.Language[] = lang.getAllLanguages();
   public profileTimeout: any = null;
   public profiles: any = new prof.Generator().getAllProfiles();
+  public screenSizePresets: string[] = SCREEN_SIZE_PRESETS;
   public timezones: tz.Timezone[] = tz.getTimezones();
+  public usingCustomScreenSize: boolean = false;
   public tmp = {
     intervalMax: '',
     intervalMin: '',
     rangeFrom: '',
     rangeTo: '',
+    screenSizeCustom: '',
     locationRuleAction: 'include',
     locationRuleId: '',
     store: {
       ipInfo: {
         lang: '',
+        status: 'idle',
         tz: '',
       },
       profile: '',
+      savedProfile: null,
       screenSize: '',
     },
   };
@@ -966,10 +1067,13 @@ export default class App extends Vue {
     let profile: string;
     let timezone: string;
     let screen: string;
+    let ipInfo: any = this.tmp.store.savedProfile ? this.tmp.store.savedProfile.ipInfo : this.tmp.store.ipInfo;
 
     // default to real profile
     profile = this.$t('text-realProfile.message') as string;
-    if (this.settings.profile.selected != 'none' && !this.settings.excluded.includes(this.settings.profile.selected)) {
+    if (this.tmp.store.savedProfile) {
+      profile = this.tmp.store.savedProfile.name;
+    } else if (this.settings.profile.selected != 'none' && !this.settings.excluded.includes(this.settings.profile.selected)) {
       let p: any = this.profileList.find(p => p.id === (/\d/.test(this.settings.profile.selected) ? this.settings.profile.selected : this.tmp.store.profile));
       profile = p ? p.name.replace('-', '/') : profile;
     }
@@ -984,19 +1088,33 @@ export default class App extends Vue {
 
     if (this.settings.options.timeZone === 'default') {
       timezone = this.$t('popup-home-currentProfile-defaultTimezone.message') as string;
-    } else if (this.settings.options.timeZone === 'ip') {
-      timezone = '(IP) ' + this.tmp.store.ipInfo.tz;
+    } else if (this.tmp.store.savedProfile && this.tmp.store.savedProfile.timeZone) {
+      timezone = this.tmp.store.savedProfile.timeZone;
+    } else if (this.settings.options.timeZone === 'ip' || this.settings.options.timeZone === 'ipRule') {
+      if (ipInfo.tz != '') {
+        let source = this.settings.options.timeZone === 'ip' ? 'IP' : this.$t('text-ipRule.message');
+        timezone = `(${source}) ${ipInfo.tz}`;
+      } else if (ipInfo.status === 'unavailable') {
+        timezone = this.$t('popup-home-currentProfile-unavailableIPInfo.message') as string;
+      } else {
+        timezone = this.$t('popup-home-currentProfile-gettingTimezone.message') as string;
+      }
     } else {
       timezone = this.settings.options.timeZone;
     }
 
     if (this.settings.headers.spoofAcceptLang.enabled) {
       if (this.settings.headers.spoofAcceptLang.value) {
-        if (this.settings.headers.spoofAcceptLang.value === 'default') {
+        if (this.tmp.store.savedProfile && this.tmp.store.savedProfile.language) {
+          language = lang.getLanguage(this.tmp.store.savedProfile.language).name;
+        } else if (this.settings.headers.spoofAcceptLang.value === 'default') {
           language = this.$t('popup-home-currentProfile-defaultLanguage.message') as string;
-        } else if (this.settings.headers.spoofAcceptLang.value === 'ip') {
-          if (this.tmp.store.ipInfo.lang != '') {
-            language = lang.getLanguage(this.tmp.store.ipInfo.lang).name + ' (IP)';
+        } else if (this.settings.headers.spoofAcceptLang.value === 'ip' || this.settings.headers.spoofAcceptLang.value === 'ipRule') {
+          if (ipInfo.lang != '') {
+            let source = this.settings.headers.spoofAcceptLang.value === 'ip' ? 'IP' : this.$t('text-ipRule.message');
+            language = `${lang.getLanguage(ipInfo.lang).name} (${source})`;
+          } else if (ipInfo.status === 'unavailable') {
+            language = this.$t('popup-home-currentProfile-unavailableIPInfo.message') as string;
           } else {
             language = this.$t('popup-home-currentProfile-gettingTimezone.message') as string;
           }
@@ -1035,11 +1153,26 @@ export default class App extends Vue {
   }
 
   get canReloadIP(): boolean {
-    if (this.settings.options.timeZone === 'ip' || (this.settings.headers.spoofAcceptLang.value === 'ip' && this.settings.headers.spoofAcceptLang.enabled)) {
+    if (
+      ['ip', 'ipRule'].includes(this.settings.options.timeZone) ||
+      (['ip', 'ipRule'].includes(this.settings.headers.spoofAcceptLang.value) && this.settings.headers.spoofAcceptLang.enabled)
+    ) {
       return true;
     }
 
     return false;
+  }
+
+  get canUseChangeProfileButton(): boolean {
+    return this.isRandomProfile || (this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange);
+  }
+
+  get changeProfileButtonLabel(): string {
+    if (this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange) {
+      return this.$t('popup-home-changeIP.message') as string;
+    }
+
+    return this.$t('popup-home-change.message') as string;
   }
 
   get isRandomProfile(): boolean {
@@ -1070,6 +1203,18 @@ export default class App extends Vue {
 
   get settings(): any {
     return this['$store'].state;
+  }
+
+  get screenSizeSelectValue(): string {
+    if (this.usingCustomScreenSize) {
+      return 'custom';
+    }
+
+    if (['default', 'profile'].includes(this.settings.options.screenSize) || this.screenSizePresets.includes(this.settings.options.screenSize)) {
+      return this.settings.options.screenSize;
+    }
+
+    return 'custom';
   }
 
   get version(): string {
@@ -1126,6 +1271,8 @@ export default class App extends Vue {
           Vue.set(this.tmp, 'store', request.data);
         } else if (request.action === 'updateIPRules') {
           this['$store'].dispatch('syncSettings', { ipRules: request.data });
+        } else if (request.action === 'updateSavedProfiles') {
+          this['$store'].dispatch('syncSettings', { savedProfiles: request.data });
         } else if (request.action === 'updateWhitelist') {
           this['$store'].dispatch('syncSettings', { whitelist: request.data });
         } else if (request.action === 'save') {
@@ -1138,7 +1285,7 @@ export default class App extends Vue {
 
     this.getCurrentPage();
 
-    if (!/random|none/.test(this.settings.profile.selected)) {
+    if (!/random|none|saved:/.test(this.settings.profile.selected)) {
       if (this.settings.profile.selected.includes('win')) {
         this.currentProfileGroup = 'windows';
       } else if (this.settings.profile.selected.includes('mac')) {
@@ -1177,6 +1324,8 @@ export default class App extends Vue {
     this.tmp.intervalMin = this.settings.profile.interval.min;
     this.tmp.rangeFrom = this.settings.headers.spoofIP.rangeFrom;
     this.tmp.rangeTo = this.settings.headers.spoofIP.rangeTo;
+    this.tmp.screenSizeCustom = this.screenSizeSelectValue === 'custom' ? this.settings.options.screenSize : '390x844';
+    this.usingCustomScreenSize = this.screenSizeSelectValue === 'custom';
   }
 
   async getCurrentPage() {
@@ -1264,6 +1413,29 @@ export default class App extends Vue {
     });
   }
 
+  async saveCurrentProfile(): Promise<void> {
+    let savedProfile = await browser.runtime.sendMessage({
+      action: 'saveCurrentProfile',
+    });
+
+    if (savedProfile) {
+      await this['$store'].dispatch('syncSettings', {
+        savedProfiles: this.settings.savedProfiles.concat([savedProfile]),
+      });
+    }
+  }
+
+  isValidScreenSize(value: string): boolean {
+    let match = /^([1-9]\d{2,4})x([1-9]\d{2,4})$/.exec(value);
+
+    if (!match) return false;
+
+    let width = Number(match[1]);
+    let height = Number(match[2]);
+
+    return width >= 100 && width <= 10000 && height >= 100 && height <= 10000;
+  }
+
   resizeProfileList(): void {
     // @ts-ignore
     let positionX: number = document.querySelector('ul').offsetTop + document.querySelector('ul').offsetHeight + 10;
@@ -1304,6 +1476,52 @@ export default class App extends Vue {
       {
         name: 'headers.spoofIP.rangeTo',
         value: this.tmp.rangeTo,
+      },
+    ]);
+
+    webext.sendToBackground(this.settings);
+  }
+
+  async setScreenSize(evt: any): Promise<void> {
+    let value: string = evt.target.value;
+
+    this.usingCustomScreenSize = value === 'custom';
+
+    if (value === 'custom') {
+      if (!this.isValidScreenSize(this.tmp.screenSizeCustom)) {
+        this.tmp.screenSizeCustom = '390x844';
+      }
+
+      value = this.tmp.screenSizeCustom;
+    }
+
+    this.errors.screenSize = false;
+
+    await this['$store'].dispatch('changeSetting', [
+      {
+        name: 'options.screenSize',
+        value,
+      },
+    ]);
+
+    webext.sendToBackground(this.settings);
+  }
+
+  async setCustomScreenSize(evt: any): Promise<void> {
+    let value: string = evt.target.value.trim();
+    this.usingCustomScreenSize = true;
+
+    if (!this.isValidScreenSize(value)) {
+      this.errors.screenSize = true;
+      return;
+    }
+
+    this.errors.screenSize = false;
+
+    await this['$store'].dispatch('changeSetting', [
+      {
+        name: 'options.screenSize',
+        value,
       },
     ]);
 

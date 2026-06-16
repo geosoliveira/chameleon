@@ -30,6 +30,8 @@ export default new Vuex.Store({
       spoofIP: {
         enabled: false,
         option: 0,
+        preserveOnProfileChange: false,
+        rotateOnlyOnProfileChange: false,
         customMode: 'range',
         rangeFrom: '',
         rangeTo: '',
@@ -38,6 +40,7 @@ export default new Vuex.Store({
       },
     },
     ipRules: [],
+    savedProfiles: [],
     profile: {
       selected: 'none',
       interval: {
@@ -66,6 +69,7 @@ export default new Vuex.Store({
       protectWinName: false,
       resistFingerprinting: false,
       screenSize: 'default',
+      screenSizeMode: 'screenAndWindow',
       spoofAudioContext: false,
       spoofClientRects: false,
       spoofFontFingerprint: false,

@@ -5,6 +5,9 @@
   "notifications-profileChange": {
     "message": "Perfil alterado:"
   },
+  "notifications-ipChange": {
+    "message": "IP alterado:"
+  },
   "notifications-unableToGetIPInfo": {
     "message": "Não foi possível obter as informações de IP"
   },
@@ -209,6 +212,9 @@
   "popup-home-change": {
     "message": "alterar"
   },
+  "popup-home-changeIP": {
+    "message": "alterar IP"
+  },
   "popup-home-currentProfile": {
     "message": "Perfil atual"
   },
@@ -371,6 +377,12 @@
   "popup-headers-spoofIP-custom": {
     "message": "IP personalizado"
   },
+  "popup-headers-spoofIP-preserveOnProfileChange": {
+    "message": "Manter IP ao trocar perfil"
+  },
+  "popup-headers-spoofIP-rotateOnlyOnProfileChange": {
+    "message": "Trocar somente o IP ao trocar perfil"
+  },
   "popup-headers-spoofIP-rangeFrom": {
     "message": "Intervalo desde"
   },
@@ -406,6 +418,15 @@
   },
   "popup-options-injection-screen": {
     "message": "Tamanho do ecrã"
+  },
+  "popup-options-injection-screenCustom": {
+    "message": "Personalizado"
+  },
+  "popup-options-injection-screenModeScreen": {
+    "message": "Somente ecrã"
+  },
+  "popup-options-injection-screenModeScreenAndWindow": {
+    "message": "Ecrã + tamanho da janela"
   },
   "popup-options-injection-spoofFontFingerprint": {
     "message": "Falsear impressão digital dos tipos de letra"

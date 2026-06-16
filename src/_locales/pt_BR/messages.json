@@ -5,6 +5,9 @@
   "notifications-profileChange": {
     "message": "Perfil alterado:"
   },
+  "notifications-ipChange": {
+    "message": "IP alterado:"
+  },
   "notifications-unableToGetIPInfo": {
     "message": "Não foi possível obter detalhes sobre IP"
   },
@@ -232,6 +235,15 @@
   "options-tab-ipRules": {
     "message": "Regras de IP"
   },
+  "options-savedProfiles-created": {
+    "message": "Criado"
+  },
+  "options-savedProfiles-empty": {
+    "message": "Nenhum perfil salvo ainda."
+  },
+  "options-savedProfiles-ip": {
+    "message": "IP"
+  },
   "options-whitelist-acceptLang": {
     "message": "Idioma (Cabeçalho \"Aceitar-Idioma\")"
   },
@@ -277,6 +289,12 @@
   "popup-home-change": {
     "message": "alterar"
   },
+  "popup-home-changeIP": {
+    "message": "alterar IP"
+  },
+  "popup-home-saveCurrentProfile": {
+    "message": "salvar perfil atual"
+  },
   "popup-home-currentProfile": {
     "message": "Perfil atual"
   },
@@ -291,6 +309,9 @@
   },
   "popup-home-currentProfile-gettingTimezone": {
     "message": "Obtendo as informações do IP"
+  },
+  "popup-home-currentProfile-unavailableIPInfo": {
+    "message": "Informações do IP indisponíveis"
   },
   "popup-home-currentProfile-screenProfile": {
     "message": "Tela (Perfil)"
@@ -388,6 +409,9 @@
   "popup-profile-randomMobileProfile": {
     "message": "Perfil aleatório (Telefone)"
   },
+  "popup-profile-randomSavedProfiles": {
+    "message": "Perfil salvo aleatório"
+  },
   "popup-profile-showProfileOnIcon": {
     "message": "Mostrar o perfil do navegador no ícone"
   },
@@ -447,6 +471,12 @@
   },
   "popup-headers-spoofIP-custom": {
     "message": "IP personalizado"
+  },
+  "popup-headers-spoofIP-preserveOnProfileChange": {
+    "message": "Manter IP ao trocar perfil"
+  },
+  "popup-headers-spoofIP-rotateOnlyOnProfileChange": {
+    "message": "Trocar somente o IP ao trocar perfil"
   },
   "popup-headers-spoofIP-customModeRange": {
     "message": "Intervalo de IP"
@@ -516,6 +546,15 @@
   },
   "popup-options-injection-screen": {
     "message": "Tamanho da tela"
+  },
+  "popup-options-injection-screenCustom": {
+    "message": "Personalizado"
+  },
+  "popup-options-injection-screenModeScreen": {
+    "message": "Somente tela"
+  },
+  "popup-options-injection-screenModeScreenAndWindow": {
+    "message": "Tela + tamanho da janela"
   },
   "popup-options-injection-spoofFontFingerprint": {
     "message": "Simular a impressão digital da fonte"
@@ -640,6 +679,9 @@
   "text-disableReferer": {
     "message": "Desativar Referência"
   },
+  "text-ipRule": {
+    "message": "Regra de IP"
+  },
   "text-language": {
     "message": "Idioma"
   },
@@ -648,6 +690,9 @@
   },
   "text-profile": {
     "message": "Perfil"
+  },
+  "text-savedProfiles": {
+    "message": "Perfis salvos"
   },
   "text-realProfile": {
     "message": "Perfil Verdadeiro"

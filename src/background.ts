@@ -7,6 +7,22 @@ webext.firstTimeInstall();
 store.state.version = browser.runtime.getManifest().version;
 
 let chameleon = new Chameleon(JSON.parse(JSON.stringify(store.state)));
+let syncFloatingProfileButton = () => {
+  browser.tabs.query({}, tabs => {
+    for (let i = 0; i < tabs.length; i++) {
+      browser.tabs.sendMessage(
+        tabs[i].id,
+        {
+          action: 'floatingProfileButtonSettings',
+          data: chameleon.getFloatingProfileButtonSettings(),
+        },
+        () => {
+          if (browser.runtime.lastError) return;
+        }
+      );
+    }
+  });
+};
 let messageHandler = (request: any, sender: any, sendResponse: any) => {
   if (request.action === 'save') {
     if (chameleon.timeout) {
@@ -38,20 +54,7 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
       beforeLast[keys.slice(-1).pop()] = request.data[i].value;
     }
 
-    browser.tabs.query({}, tabs => {
-      for (let i = 0; i < tabs.length; i++) {
-        browser.tabs.sendMessage(
-          tabs[i].id,
-          {
-            action: 'floatingProfileButtonSettings',
-            data: chameleon.getFloatingProfileButtonSettings(),
-          },
-          () => {
-            if (browser.runtime.lastError) return;
-          }
-        );
-      }
-    });
+    syncFloatingProfileButton();
     sendResponse('done');
   } else if (request.action === 'getFloatingProfileButtonSettings') {
     sendResponse(chameleon.getFloatingProfileButtonSettings());
@@ -62,13 +65,37 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
       return true;
     }
 
-    chameleon.run();
+    (async () => {
+      await chameleon.run();
+      syncFloatingProfileButton();
 
-    if (chameleon.settings.profile.floatingButton.reloadTab && sender.tab && sender.tab.id) {
-      browser.tabs.reload(sender.tab.id);
+      if (chameleon.settings.profile.floatingButton.reloadTab && sender.tab && sender.tab.id) {
+        browser.tabs.reload(sender.tab.id);
+      }
+
+      sendResponse('done');
+    })();
+  } else if (request.action === 'floatingProfileSave') {
+    let savedProfile = chameleon.saveCurrentProfile();
+
+    if (savedProfile) {
+      browser.tabs.query({}, tabs => {
+        for (let i = 0; i < tabs.length; i++) {
+          browser.tabs.sendMessage(
+            tabs[i].id,
+            {
+              action: 'updateSavedProfiles',
+              data: chameleon.settings.savedProfiles,
+            },
+            () => {
+              if (browser.runtime.lastError) return;
+            }
+          );
+        }
+      });
     }
 
-    sendResponse('done');
+    sendResponse(savedProfile);
   } else if (request.action === 'getSettings') {
     (async () => {
       if (!!browser.privacy) {
@@ -114,8 +141,26 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
   } else if (request.action === 'reloadIPInfo') {
     if (chameleon.settings.options.timeZone === 'ip' || (chameleon.settings.headers.spoofAcceptLang.value === 'ip' && chameleon.settings.headers.spoofAcceptLang.enabled)) {
       chameleon.updateIPInfo();
-      sendResponse('done');
+    } else if (
+      chameleon.settings.options.timeZone === 'ipRule' ||
+      (chameleon.settings.headers.spoofAcceptLang.value === 'ipRule' && chameleon.settings.headers.spoofAcceptLang.enabled)
+    ) {
+      (async () => {
+        await chameleon.updateSpoofIPInfo();
+        chameleon.updateProfileCache();
+        chameleon.buildInjectionScript();
+        syncFloatingProfileButton();
+      })();
     }
+    sendResponse('done');
+  } else if (request.action === 'reloadSpoofIPInfo') {
+    (async () => {
+      await chameleon.updateSpoofIPInfo();
+      chameleon.updateProfileCache();
+      chameleon.buildInjectionScript();
+      syncFloatingProfileButton();
+      sendResponse('done');
+    })();
   } else if (request.action === 'reloadProfile') {
     chameleon.setTimer(request.data);
     chameleon.buildInjectionScript();
@@ -136,13 +181,31 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
       chameleon.settings.headers.spoofIP.locationRules = request.data[0].value;
     }
 
-    chameleon.updateSpoofIP();
-    sendResponse('done');
+    (async () => {
+      chameleon.updateSpoofIP({
+        preserveCurrent: chameleon.settings.headers.spoofIP.preserveOnProfileChange,
+      });
+      await chameleon.updateSpoofIPInfo();
+      chameleon.updateProfileCache();
+      chameleon.buildInjectionScript();
+      syncFloatingProfileButton();
+      sendResponse('done');
+    })();
   } else if (request.action === 'reset') {
     chameleon.reset();
     browser.runtime.reload();
   } else if (request.action === 'updateIPRules') {
     chameleon.settings.ipRules = request.data;
+    (async () => {
+      chameleon.cleanSettings();
+      chameleon.updateSpoofIP({
+        preserveCurrent: chameleon.settings.headers.spoofIP.preserveOnProfileChange,
+      });
+      await chameleon.updateSpoofIPInfo();
+      chameleon.updateProfileCache();
+      chameleon.buildInjectionScript();
+      syncFloatingProfileButton();
+    })();
 
     chameleon.timeout = setTimeout(() => {
       chameleon.saveSettings(chameleon.settings);
@@ -153,21 +216,22 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
 
     // reset interval timer and send notification
     chameleon.setTimer();
-    browser.tabs.query({}, tabs => {
-      for (let i = 0; i < tabs.length; i++) {
-        browser.tabs.sendMessage(
-          tabs[i].id,
-          {
-            action: 'floatingProfileButtonSettings',
-            data: chameleon.getFloatingProfileButtonSettings(),
-          },
-          () => {
-            if (browser.runtime.lastError) return;
-          }
-        );
-      }
-    });
+    syncFloatingProfileButton();
     sendResponse('done');
+  } else if (request.action === 'saveCurrentProfile') {
+    let savedProfile = chameleon.saveCurrentProfile();
+    sendResponse(savedProfile);
+  } else if (request.action === 'updateSavedProfiles') {
+    chameleon.settings.savedProfiles = request.data;
+    chameleon.cleanSettings();
+    (async () => {
+      await chameleon.start({
+        preserveSpoofIP: true,
+      });
+      syncFloatingProfileButton();
+      chameleon.saveSettings(chameleon.settings);
+      sendResponse('done');
+    })();
   } else if (request.action === 'updateWhitelist') {
     chameleon.settings.whitelist = request.data;
     chameleon.updateProfileCache();
@@ -184,8 +248,9 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
   return true;
 };
 
-browser.alarms.onAlarm.addListener(() => {
-  chameleon.run();
+browser.alarms.onAlarm.addListener(async () => {
+  await chameleon.run();
+  syncFloatingProfileButton();
 });
 
 browser.runtime.onMessage.addListener(messageHandler);
@@ -196,6 +261,19 @@ browser.runtime.onMessage.addListener(messageHandler);
   if (chameleon.settings.options.timeZone === 'ip' || (chameleon.settings.headers.spoofAcceptLang.value === 'ip' && chameleon.settings.headers.spoofAcceptLang.enabled)) {
     setTimeout(() => {
       chameleon.updateIPInfo();
+    }, chameleon.settings.config.reloadIPStartupDelay * 1000);
+  } else if (
+    chameleon.settings.options.timeZone === 'ipRule' ||
+    (chameleon.settings.headers.spoofAcceptLang.value === 'ipRule' && chameleon.settings.headers.spoofAcceptLang.enabled)
+  ) {
+    setTimeout(() => {
+      (async () => {
+        chameleon.updateSpoofIP();
+        await chameleon.updateSpoofIPInfo();
+        chameleon.updateProfileCache();
+        chameleon.buildInjectionScript();
+        syncFloatingProfileButton();
+      })();
     }, chameleon.settings.config.reloadIPStartupDelay * 1000);
   }
 

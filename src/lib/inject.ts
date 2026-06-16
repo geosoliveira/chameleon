@@ -42,7 +42,9 @@ class Injector {
     let wl = util.findWhitelistRule(settings.whitelist.rules, window.top.location.host, window.top.location.href);
 
     if (wl === null) {
-      if (tempStore.profile && tempStore.profile != 'none') {
+      if (tempStore.savedProfile) {
+        p = tempStore.savedProfile.profile;
+      } else if (tempStore.profile && tempStore.profile != 'none') {
         p = profileCache[tempStore.profile];
       } else {
         if (settings.profile.selected != 'none') {
@@ -112,21 +114,25 @@ class Injector {
       }
 
       if (settings.headers.spoofAcceptLang.enabled) {
-        if (settings.headers.spoofAcceptLang.value != 'default') {
+        if (settings.headers.spoofAcceptLang.value != 'default' || (tempStore.savedProfile && tempStore.savedProfile.language)) {
           let spoofedLang: string;
 
-          if (settings.headers.spoofAcceptLang.value === 'ip') {
-            spoofedLang = tempStore.ipInfo.lang;
+          if (tempStore.savedProfile && tempStore.savedProfile.language) {
+            spoofedLang = tempStore.savedProfile.language;
+          } else if (settings.headers.spoofAcceptLang.value === 'ip' || settings.headers.spoofAcceptLang.value === 'ipRule') {
+            spoofedLang = tempStore.savedProfile ? tempStore.savedProfile.ipInfo.lang : tempStore.ipInfo.lang;
           } else {
             spoofedLang = settings.headers.spoofAcceptLang.value;
           }
 
-          let l = lang.getLanguage(spoofedLang);
-          this.spoof.metadata['language'] = {
-            code: spoofedLang,
-            nav: l.nav,
-          };
-          this.updateInjectionData(language);
+          if (spoofedLang) {
+            let l = lang.getLanguage(spoofedLang);
+            this.spoof.metadata['language'] = {
+              code: spoofedLang,
+              nav: l.nav,
+            };
+            this.updateInjectionData(language);
+          }
         }
       }
 
@@ -152,13 +158,14 @@ class Injector {
       }
 
       if (settings.options.screenSize != 'default') {
-        if (settings.options.screenSize == 'profile' && p) {
+        if ((settings.options.screenSize == 'profile' || tempStore.savedProfile) && p) {
           this.spoof.metadata['screen'] = {
             width: p.screen.width,
             height: p.screen.height,
             availHeight: p.screen.availHeight,
             deviceScaleFactor: p.screen.deviceScaleFactor,
             usingProfileRes: true,
+            spoofWindowSize: settings.options.screenSizeMode !== 'screen',
             pixelDepth: this.spoof.metadata['profileOS'].includes('ios') ? 32 : 24,
           };
         } else {
@@ -168,6 +175,7 @@ class Injector {
             width: scr[0],
             height: scr[1],
             usingProfileRes: false,
+            spoofWindowSize: settings.options.screenSizeMode !== 'screen',
             pixelDepth: 24,
           };
         }
@@ -180,8 +188,10 @@ class Injector {
       if (settings.options.timeZone != 'default') {
         let tz: string = settings.options.timeZone;
 
-        if (tz === 'ip') {
-          tz = tempStore.ipInfo.tz;
+        if (tempStore.savedProfile && tempStore.savedProfile.timeZone) {
+          tz = tempStore.savedProfile.timeZone;
+        } else if (tz === 'ip' || tz === 'ipRule') {
+          tz = tempStore.savedProfile ? tempStore.savedProfile.ipInfo.tz : tempStore.ipInfo.tz;
         }
 
         if (tz) {

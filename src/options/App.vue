@@ -6,6 +6,7 @@
         <div @click="changeTab('about')" class="options-tab" :class="activeTab('about')" v-t="'options-tab-about.message'"></div>
         <div @click="changeTab('whitelist')" class="options-tab" :class="activeTab('whitelist')" v-t="'text-whitelist.message'"></div>
         <div @click="changeTab('iprules')" class="options-tab" :class="activeTab('iprules')" v-t="'options-tab-ipRules.message'"></div>
+        <div @click="changeTab('savedprofiles')" class="options-tab" :class="activeTab('savedprofiles')" v-t="'text-savedProfiles.message'"></div>
       </div>
     </div>
     <div class="flex-grow px-4 pt-12 z-0">
@@ -211,6 +212,38 @@
                 </td>
                 <td class="py-4">{{ getLangName(r.lang) }}</td>
                 <td class="py-4">{{ r.tz }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div v-show="currentTab === 'savedprofiles'" class="text-2xl flex flex-col">
+        <div class="flex flex-wrap pb-12">
+          <table class="w-full">
+            <thead class="border-b-2">
+              <tr class="flex flex-col flex-no wrap md:table-row text-left">
+                <th class="font-bold py-4 w-2/5" v-t="'text-name.message'"></th>
+                <th class="font-bold py-4" v-t="'options-savedProfiles-created.message'"></th>
+                <th class="font-bold py-4" v-t="'options-savedProfiles-ip.message'"></th>
+                <th class="font-bold py-4" v-t="'text-language.message'"></th>
+                <th class="font-bold py-4" v-t="'text-timezone.message'"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!settings.savedProfiles.length" class="flex flex-col px-2 border-b-2 md:table-row text-left">
+                <td class="py-4" colspan="5" v-t="'options-savedProfiles-empty.message'"></td>
+              </tr>
+              <tr v-for="p in settings.savedProfiles" :key="p.id" class="flex flex-col px-2 border-b-2 md:table-row text-left">
+                <td class="flex justify-between py-4 mr-8">
+                  <input @change="saveSavedProfiles" v-model="p.name" class="block w-full form-input text-base mr-2" />
+                  <button @click="deleteSavedProfile(p.id)" class="px-2">
+                    <feather type="trash" size="1em"></feather>
+                  </button>
+                </td>
+                <td class="py-4">{{ formatDate(p.createdAt) }}</td>
+                <td class="py-4">{{ p.spoofIP || '-' }}</td>
+                <td class="py-4">{{ p.language ? getLangName(p.language) : '-' }}</td>
+                <td class="py-4">{{ p.timeZone || '-' }}</td>
               </tr>
             </tbody>
           </table>
@@ -637,6 +670,8 @@ export default class App extends Vue {
 
     if (hash[0] === '#iprules') {
       this.currentTab = 'iprules';
+    } else if (hash[0] === '#savedprofiles') {
+      this.currentTab = 'savedprofiles';
     } else if (hash[0] === '#whitelist') {
       this.currentTab = 'whitelist';
 
@@ -671,13 +706,7 @@ export default class App extends Vue {
   }
 
   createNewRule(): void {
-    let lang: string;
-
-    if (this.languages.findIndex(l => l.code === this.defaultLanguage) > -1) {
-      lang = this.defaultLanguage;
-    } else {
-      lang = 'en-US';
-    }
+    let lang: string = this.defaultIPRuleLanguage();
 
     this.tmp.ipRule.id = '';
     this.tmp.ipRule.name = '';
@@ -793,6 +822,15 @@ export default class App extends Vue {
     this.modalType = Modal.CONFIRM_WL_DELETE;
   }
 
+  deleteSavedProfile(id: string): void {
+    this.settings.savedProfiles.splice(
+      this.settings.savedProfiles.findIndex(p => p.id === id),
+      1
+    );
+
+    this.saveSavedProfiles();
+  }
+
   deleteSite(index: number): void {
     this.tmp.wlRule.sites.splice(index, 1);
     if (index === 0 && this.tmp.wlRule.sites.length === 0) {
@@ -805,6 +843,18 @@ export default class App extends Vue {
 
   getLangName(langCode: string): string {
     return lang.getLanguage(langCode).name;
+  }
+
+  formatDate(value: string): string {
+    return value ? new Date(value).toLocaleString() : '';
+  }
+
+  defaultIPRuleLanguage(): string {
+    if (this.languages.findIndex(l => l.code === this.defaultLanguage) > -1) {
+      return this.defaultLanguage;
+    }
+
+    return 'en-US';
   }
 
   getProfile(profile: string): string {
@@ -828,6 +878,8 @@ export default class App extends Vue {
       function(request: any): void {
         if (request.action === 'save') {
           this.settings.config = Object.assign(this.settings.config, request.data.config);
+        } else if (request.action === 'updateSavedProfiles') {
+          this['$store'].dispatch('syncSettings', { savedProfiles: request.data });
         }
       }.bind(this)
     );
@@ -835,6 +887,8 @@ export default class App extends Vue {
     window.onhashchange = function() {
       if (window.location.hash === '#iprules') {
         this.currentTab = 'iprules';
+      } else if (window.location.hash === '#savedprofiles') {
+        this.currentTab = 'savedprofiles';
       } else if (window.location.hash === '#whitelist') {
         this.currentTab = 'whitelist';
       } else {
@@ -1017,6 +1071,13 @@ export default class App extends Vue {
 
     this.showModal = false;
     this.savingIPRule = false;
+  }
+
+  async saveSavedProfiles(): Promise<void> {
+    await browser.runtime.sendMessage({
+      action: 'updateSavedProfiles',
+      data: this.settings.savedProfiles,
+    });
   }
 
   async saveWLRule(): Promise<void> {

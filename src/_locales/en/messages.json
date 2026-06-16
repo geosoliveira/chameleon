@@ -5,6 +5,9 @@
   "notifications-profileChange": {
     "message": "Profile changed:"
   },
+  "notifications-ipChange": {
+    "message": "IP changed:"
+  },
   "notifications-unableToGetIPInfo": {
     "message": "Unable to get IP info"
   },
@@ -232,6 +235,15 @@
   "options-tab-ipRules": {
     "message": "IP Rules"
   },
+  "options-savedProfiles-created": {
+    "message": "Created"
+  },
+  "options-savedProfiles-empty": {
+    "message": "No saved profiles yet."
+  },
+  "options-savedProfiles-ip": {
+    "message": "IP"
+  },
   "options-whitelist-acceptLang": {
     "message": "Accept-Language"
   },
@@ -277,6 +289,12 @@
   "popup-home-change": {
     "message": "change"
   },
+  "popup-home-changeIP": {
+    "message": "change IP"
+  },
+  "popup-home-saveCurrentProfile": {
+    "message": "save current profile"
+  },
   "popup-home-currentProfile": {
     "message": "Current Profile"
   },
@@ -291,6 +309,9 @@
   },
   "popup-home-currentProfile-gettingTimezone": {
     "message": "Getting IP info"
+  },
+  "popup-home-currentProfile-unavailableIPInfo": {
+    "message": "IP info unavailable"
   },
   "popup-home-currentProfile-screenProfile": {
     "message": "Screen (Profile)"
@@ -388,6 +409,9 @@
   "popup-profile-randomMobileProfile": {
     "message": "Random Profile (Mobile)"
   },
+  "popup-profile-randomSavedProfiles": {
+    "message": "Random saved profile"
+  },
   "popup-profile-showProfileOnIcon": {
     "message": "Show browser profile on icon"
   },
@@ -447,6 +471,12 @@
   },
   "popup-headers-spoofIP-custom": {
     "message": "Custom IP"
+  },
+  "popup-headers-spoofIP-preserveOnProfileChange": {
+    "message": "Keep IP when changing profile"
+  },
+  "popup-headers-spoofIP-rotateOnlyOnProfileChange": {
+    "message": "Change only IP when changing profile"
   },
   "popup-headers-spoofIP-customModeRange": {
     "message": "IP range"
@@ -516,6 +546,15 @@
   },
   "popup-options-injection-screen": {
     "message": "Screen Size"
+  },
+  "popup-options-injection-screenCustom": {
+    "message": "Custom"
+  },
+  "popup-options-injection-screenModeScreen": {
+    "message": "Screen only"
+  },
+  "popup-options-injection-screenModeScreenAndWindow": {
+    "message": "Screen + window size"
   },
   "popup-options-injection-spoofFontFingerprint": {
     "message": "Spoof font fingerprint"
@@ -640,6 +679,9 @@
   "text-disableReferer": {
     "message": "Disable referer"
   },
+  "text-ipRule": {
+    "message": "IP Rule"
+  },
   "text-language": {
     "message": "Language"
   },
@@ -648,6 +690,9 @@
   },
   "text-profile": {
     "message": "Profile"
+  },
+  "text-savedProfiles": {
+    "message": "Saved Profiles"
   },
   "text-realProfile": {
     "message": "Real Profile"

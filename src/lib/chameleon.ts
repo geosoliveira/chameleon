@@ -9,6 +9,31 @@ import { v4 as uuidv4 } from 'uuid';
 
 const ALL_IP_RULE_ID = '__all__';
 const ALL_IP_RANGE = 'ALL';
+const IP_RULE_VALUE = 'ipRule';
+const SCREEN_SIZE_VALUES = [
+  'default',
+  'profile',
+  '320x568',
+  '360x640',
+  '375x667',
+  '390x844',
+  '414x896',
+  '768x1024',
+  '800x600',
+  '1024x768',
+  '1280x720',
+  '1280x800',
+  '1366x768',
+  '1440x900',
+  '1600x900',
+  '1920x1080',
+  '1920x1200',
+  '2560x1440',
+  '2560x1600',
+  '3840x2160',
+  '4096x2304',
+  '5120x2880',
+];
 
 enum IntervalOption {
   None = 0,
@@ -24,6 +49,7 @@ interface TemporarySettings {
   badge: any;
   ipInfo: any;
   profile: string;
+  savedProfile: any;
   screenSize: string;
   spoofIP: string;
   version: string;
@@ -57,9 +83,12 @@ export class Chameleon {
       ipInfo: {
         cache: null,
         lang: '',
+        ruleId: '',
+        status: 'idle',
         tz: '',
       },
       profile: '',
+      savedProfile: null,
       screenSize: '',
       spoofIP: '',
       version: '',
@@ -215,6 +244,14 @@ export class Chameleon {
       this.settings.headers.spoofIP.customMode = 'range';
     }
 
+    if (typeof this.settings.headers.spoofIP.preserveOnProfileChange !== 'boolean') {
+      this.settings.headers.spoofIP.preserveOnProfileChange = false;
+    }
+
+    if (typeof this.settings.headers.spoofIP.rotateOnlyOnProfileChange !== 'boolean') {
+      this.settings.headers.spoofIP.rotateOnlyOnProfileChange = false;
+    }
+
     if (!Array.isArray(this.settings.headers.spoofIP.locationRules)) {
       this.settings.headers.spoofIP.locationRules = [];
     }
@@ -273,6 +310,38 @@ export class Chameleon {
     }
 
     this.settings.config.reloadIPStartupDelay = this.settings.config.reloadIPStartupDelay || 0;
+
+    if (!['screen', 'screenAndWindow'].includes(this.settings.options.screenSizeMode)) {
+      this.settings.options.screenSizeMode = 'screenAndWindow';
+    }
+
+    if (!Array.isArray(this.settings.ipRules)) {
+      this.settings.ipRules = [];
+    }
+
+    if (!Array.isArray(this.settings.savedProfiles)) {
+      this.settings.savedProfiles = [];
+    }
+
+    if (this.settings.profile.selected === 'randomSaved' && this.settings.savedProfiles.length === 0) {
+      this.settings.profile.selected = 'none';
+    }
+
+    if (this.settings.profile.selected && this.settings.profile.selected.startsWith('saved:')) {
+      let id: string = this.settings.profile.selected.replace(/^saved:/, '');
+      if (!this.settings.savedProfiles.find(p => p.id === id)) {
+        this.settings.profile.selected = 'none';
+      }
+    }
+
+    for (let i = 0; i < this.settings.ipRules.length; i++) {
+      if (Array.isArray(this.settings.ipRules[i].locales) && this.settings.ipRules[i].locales.length > 0) {
+        this.settings.ipRules[i].lang = this.settings.ipRules[i].locales[0].lang;
+        this.settings.ipRules[i].tz = this.settings.ipRules[i].locales[0].tz;
+      }
+
+      delete this.settings.ipRules[i].locales;
+    }
 
     // migrate Windows FF profiles
     if (this.FF_PROFILES[this.settings.profile.selected]) {
@@ -336,7 +405,12 @@ export class Chameleon {
   }
 
   private getProfileInUse(): void {
-    if (this.settings.profile.selected === 'none' || this.settings.excluded.includes(this.settings.profile.selected) || this.tempStore.profile === 'none') {
+    if (this.tempStore.savedProfile) {
+      this.tempStore.badge = {
+        text: 'SAV',
+        title: this.tempStore.savedProfile.name,
+      };
+    } else if (this.settings.profile.selected === 'none' || this.settings.excluded.includes(this.settings.profile.selected) || this.tempStore.profile === 'none') {
       this.tempStore.badge = {
         text: '',
         title: browser.i18n.getMessage('text-realProfile'),
@@ -450,7 +524,7 @@ export class Chameleon {
           ['options.webSockets', prev.settings.webSockets, ['allow_all', 'block_3rd_party', 'block_all']],
           ['options.protectKBFingerprint.enabled', prev.settings.protectKeyboardFingerprint, 'boolean'],
           ['options.protectKBFingerprint.delay', prev.settings.kbDelay, 'number'],
-          ['options.screenSize', prev.settings.screenSize, ['default', 'profile', '1366x768', '1440x900', '1600x900', '1920x1080', '2560x1440', '2560x1600']],
+          ['options.screenSize', prev.settings.screenSize, 'screenSize'],
           ['options.timeZone', prev.settings.timeZone, timezoneIds.concat(['default', 'ip'])],
         ];
 
@@ -715,7 +789,7 @@ export class Chameleon {
     }
 
     // update cache for selected profile
-    if (this.settings.profile.selected.includes('-')) {
+    if (this.settings.profile.selected.includes('-') && !this.settings.profile.selected.startsWith('saved:')) {
       if (!(this.settings.profile.selected in this.profileCache)) {
         this.profileCache[this.settings.profile.selected] = profGen.getProfile(this.settings.profile.selected);
       }
@@ -731,10 +805,12 @@ export class Chameleon {
     if (this.settings.options.screenSize === 'profile') {
       let p: any;
 
-      if (this.tempStore.profile && this.tempStore.profile != 'none') {
+      if (this.tempStore.savedProfile) {
+        p = this.tempStore.savedProfile.profile;
+      } else if (this.tempStore.profile && this.tempStore.profile != 'none') {
         p = this.profileCache[this.tempStore.profile];
       } else {
-        if (this.settings.profile.selected != 'none') {
+        if (this.settings.profile.selected != 'none' && !this.settings.profile.selected.startsWith('saved:')) {
           p = this.profileCache[this.settings.profile.selected];
         }
       }
@@ -772,23 +848,28 @@ export class Chameleon {
   }
 
   public getFloatingProfileButtonSettings(): object {
+    let canChangeProfile: boolean = this.settings.profile.selected.includes('random') || ['windows', 'macOS', 'linux', 'iOS', 'android'].includes(this.settings.profile.selected);
+    let canRotateIPOnly: boolean = this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange;
+
     return {
-      enabled:
-        this.settings.config.enabled &&
-        this.settings.profile.floatingButton.enabled &&
-        (this.settings.profile.selected.includes('random') || ['windows', 'macOS', 'linux', 'iOS', 'android'].includes(this.settings.profile.selected)),
+      enabled: this.settings.config.enabled && this.settings.profile.floatingButton.enabled && (canChangeProfile || canRotateIPOnly),
       reloadTab: this.settings.profile.floatingButton.reloadTab,
     };
   }
 
-  public run(): void {
-    this.start();
+  public async run(): Promise<void> {
+    let rotateIPOnly: boolean = this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange;
+
+    await this.start({
+      preserveProfile: rotateIPOnly,
+      preserveSpoofIP: !rotateIPOnly && this.settings.headers.spoofIP.preserveOnProfileChange,
+    });
 
     if (this.settings.config.notificationsEnabled) {
       browser.notifications.create({
         type: 'basic',
         title: 'Chameleon',
-        message: `${browser.i18n.getMessage('notifications-profileChange')} ` + this.tempStore.badge.title,
+        message: rotateIPOnly ? `${browser.i18n.getMessage('notifications-ipChange')} ${this.tempStore.spoofIP}` : `${browser.i18n.getMessage('notifications-profileChange')} ` + this.tempStore.badge.title,
       });
     }
   }
@@ -860,11 +941,112 @@ export class Chameleon {
     browser.alarms.create(alarmInfo);
   }
 
-  public start(): void {
-    this.updateProfile(this.settings.profile.selected);
-    this.updateSpoofIP();
+  public async start(options: any = {}): Promise<void> {
+    if (options.preserveProfile !== true) {
+      this.updateProfile(this.settings.profile.selected);
+    }
+
+    this.updateSpoofIP({
+      preserveCurrent: options.preserveSpoofIP === true,
+    });
+    await this.updateSpoofIPInfo();
     this.updateProfileCache();
     this.buildInjectionScript();
+  }
+
+  private ipRuleContainsIP(rule: any, ip: string): boolean {
+    if (!rule || !ip) return false;
+
+    for (let i = 0; i < rule.ips.length; i++) {
+      if (util.ipInRange(ip, rule.ips[i].split('-'))) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private getSelectedLocationRuleIds(): string[] {
+    if (this.settings.headers.spoofIP.customMode !== 'location') return [];
+
+    return this.settings.headers.spoofIP.locationRules
+      .filter(rule => rule.id !== ALL_IP_RULE_ID && rule.action !== 'exclude')
+      .map(rule => rule.id);
+  }
+
+  private findIPRuleByIP(ip: string, preferredRuleIds: string[] = []): any {
+    if (!ip) return null;
+
+    for (let i = 0; i < preferredRuleIds.length; i++) {
+      let rule = this.settings.ipRules.find(r => r.id === preferredRuleIds[i]);
+      if (this.ipRuleContainsIP(rule, ip)) {
+        return rule;
+      }
+    }
+
+    for (let i = 0; i < this.settings.ipRules.length; i++) {
+      if (preferredRuleIds.includes(this.settings.ipRules[i].id)) {
+        continue;
+      }
+
+      if (this.ipRuleContainsIP(this.settings.ipRules[i], ip)) {
+        return this.settings.ipRules[i];
+      }
+    }
+
+    return null;
+  }
+
+  private usesIPRuleLocale(): boolean {
+    return this.settings.options.timeZone === IP_RULE_VALUE || (this.settings.headers.spoofAcceptLang.enabled && this.settings.headers.spoofAcceptLang.value === IP_RULE_VALUE);
+  }
+
+  private setLanguageFromGeoLanguages(languages: string): string {
+    let ipLang: string = languages.split(',')[0];
+    let allLanguages: lang.Language[] = lang.getAllLanguages();
+    let foundLang: lang.Language;
+
+    if (ipLang !== 'en' && ipLang !== 'en-US') {
+      foundLang = allLanguages.find(l => l.nav.includes(ipLang));
+
+      if (!foundLang) {
+        let ipLangPrimary = ipLang.split('-')[0];
+        foundLang = allLanguages.find(l => l.nav.some(nav => nav.split('-')[0] === ipLangPrimary));
+      }
+    }
+
+    if (!foundLang) {
+      foundLang = lang.getLanguage('en-US');
+    }
+
+    this.tempStore.ipInfo.lang = foundLang.code;
+
+    return foundLang.name;
+  }
+
+  public async updateSpoofIPInfo(): Promise<void> {
+    if (!this.usesIPRuleLocale()) return;
+
+    this.tempStore.ipInfo.status = 'loading';
+
+    if (!this.tempStore.spoofIP && this.settings.headers.spoofIP.enabled) {
+      this.updateSpoofIP();
+    }
+
+    let preferredRuleIds = [this.tempStore.ipInfo.ruleId].filter(Boolean).concat(this.getSelectedLocationRuleIds());
+    let rule = this.findIPRuleByIP(this.tempStore.spoofIP, preferredRuleIds);
+    if (!rule) {
+      this.tempStore.ipInfo.lang = '';
+      this.tempStore.ipInfo.ruleId = '';
+      this.tempStore.ipInfo.status = 'unavailable';
+      this.tempStore.ipInfo.tz = '';
+      return;
+    }
+
+    this.tempStore.ipInfo.lang = rule.lang;
+    this.tempStore.ipInfo.ruleId = rule.id;
+    this.tempStore.ipInfo.status = 'ready';
+    this.tempStore.ipInfo.tz = rule.tz;
   }
 
   public async saveSettings(settings: any): Promise<void> {
@@ -882,6 +1064,8 @@ export class Chameleon {
   }
 
   public async updateIPInfo(): Promise<void> {
+    this.tempStore.ipInfo.status = 'loading';
+
     try {
       let notificationMsg: string;
 
@@ -893,17 +1077,14 @@ export class Chameleon {
       if ((data.timezone && data.languages) || data.ip) {
         // check if IP defined in IP rules
         let foundRule: boolean = false;
+        let rule = this.findIPRuleByIP(data.ip);
 
-        for (let i = 0; i < this.settings.ipRules.length; i++) {
-          for (let j = 0; j < this.settings.ipRules[i].ips.length; j++) {
-            if (util.ipInRange(data.ip, this.settings.ipRules[i].ips[j].split('-'))) {
-              foundRule = true;
-              this.tempStore.ipInfo.lang = this.settings.ipRules[i].lang;
-              this.tempStore.ipInfo.tz = this.settings.ipRules[i].tz;
+        if (rule) {
+          foundRule = true;
+          this.tempStore.ipInfo.lang = rule.lang;
+          this.tempStore.ipInfo.tz = rule.tz;
 
-              notificationMsg = `${browser.i18n.getMessage('notifications-usingIPRule')} ${this.tempStore.ipInfo.tz}, ${lang.getLanguage(this.tempStore.ipInfo.lang).name}`;
-            }
-          }
+          notificationMsg = `${browser.i18n.getMessage('notifications-usingIPRule')} ${this.tempStore.ipInfo.tz}, ${lang.getLanguage(this.tempStore.ipInfo.lang).name}`;
         }
 
         if (!foundRule) {
@@ -978,6 +1159,8 @@ export class Chameleon {
           }
         }
 
+        this.tempStore.ipInfo.status = 'ready';
+
         browser.runtime.sendMessage(
           {
             action: 'tempStore',
@@ -997,9 +1180,25 @@ export class Chameleon {
         }
 
         this.buildInjectionScript();
+      } else {
+        throw 'Couldn\'t find info';
       }
     } catch (e) {
       let message: string = browser.i18n.getMessage('notifications-unableToGetIPInfo');
+
+      this.tempStore.ipInfo.lang = '';
+      this.tempStore.ipInfo.status = 'unavailable';
+      this.tempStore.ipInfo.tz = '';
+
+      browser.runtime.sendMessage(
+        {
+          action: 'tempStore',
+          data: this.tempStore,
+        },
+        response => {
+          if (browser.runtime.lastError) return;
+        }
+      );
 
       if (this.settings.config.notificationsEnabled) {
         browser.notifications.create({
@@ -1012,6 +1211,31 @@ export class Chameleon {
   }
 
   public updateProfile(profile: string): void {
+    this.tempStore.savedProfile = null;
+
+    if (profile === 'randomSaved') {
+      if (this.settings.savedProfiles.length > 0) {
+        this.tempStore.savedProfile = this.settings.savedProfiles[Math.floor(Math.random() * this.settings.savedProfiles.length)];
+        this.tempStore.profile = '';
+      } else {
+        this.tempStore.profile = 'none';
+      }
+
+      return;
+    }
+
+    if (profile && profile.startsWith('saved:')) {
+      let id: string = profile.replace(/^saved:/, '');
+      let savedProfile = this.settings.savedProfiles.find(p => p.id === id);
+
+      if (savedProfile) {
+        this.tempStore.savedProfile = savedProfile;
+      }
+
+      this.tempStore.profile = '';
+      return;
+    }
+
     // update current profile if random selected
     if (!/\d|none/.test(profile)) {
       let profiles: prof.Generator = new prof.Generator(this.settings.excluded);
@@ -1025,13 +1249,78 @@ export class Chameleon {
     }
   }
 
-  public updateSpoofIP(): void {
+  public saveCurrentProfile(): any {
+    let profile: any = null;
+
+    if (this.tempStore.savedProfile) {
+      profile = this.tempStore.savedProfile.profile;
+    } else if (this.tempStore.profile && this.tempStore.profile != 'none') {
+      profile = this.profileCache[this.tempStore.profile];
+    } else if (this.settings.profile.selected && this.settings.profile.selected.includes('-') && !this.settings.profile.selected.startsWith('saved:')) {
+      profile = this.profileCache[this.settings.profile.selected];
+    }
+
+    if (!profile) {
+      return null;
+    }
+
+    let savedProfile = {
+      id: uuidv4(),
+      name: `${this.tempStore.badge.title || browser.i18n.getMessage('text-profile')} ${new Date().toLocaleString()}`,
+      createdAt: new Date().toISOString(),
+      sourceProfile: this.tempStore.savedProfile ? this.tempStore.savedProfile.sourceProfile : this.settings.profile.selected,
+      profile: JSON.parse(JSON.stringify(profile)),
+      spoofIP: this.tempStore.savedProfile ? this.tempStore.savedProfile.spoofIP : this.tempStore.spoofIP,
+      ipInfo: JSON.parse(JSON.stringify(this.tempStore.savedProfile ? this.tempStore.savedProfile.ipInfo : this.tempStore.ipInfo)),
+      language: this.tempStore.savedProfile
+        ? this.tempStore.savedProfile.language
+        : this.settings.headers.spoofAcceptLang.enabled
+        ? this.settings.headers.spoofAcceptLang.value === 'ip' || this.settings.headers.spoofAcceptLang.value === 'ipRule'
+          ? this.tempStore.ipInfo.lang
+          : this.settings.headers.spoofAcceptLang.value === 'default'
+          ? ''
+          : this.settings.headers.spoofAcceptLang.value
+        : '',
+      timeZone:
+        this.tempStore.savedProfile
+          ? this.tempStore.savedProfile.timeZone
+          : this.settings.options.timeZone === 'ip' || this.settings.options.timeZone === 'ipRule'
+          ? this.tempStore.ipInfo.tz
+          : this.settings.options.timeZone === 'default'
+          ? ''
+          : this.settings.options.timeZone,
+      screenSize: `${profile.screen.width}x${profile.screen.height}`,
+    };
+
+    this.settings.savedProfiles.push(savedProfile);
+    this.saveSettings(this.settings);
+
+    return savedProfile;
+  }
+
+  public updateSpoofIP(options: any = {}): void {
     if (this.settings.headers.spoofIP.enabled) {
+      if (options.preserveCurrent === true && this.tempStore.spoofIP) {
+        let selectedLocationRuleIds = this.getSelectedLocationRuleIds();
+        let currentRule = this.findIPRuleByIP(this.tempStore.spoofIP, selectedLocationRuleIds);
+
+        if (currentRule) {
+          this.tempStore.ipInfo.ruleId = currentRule.id;
+        }
+
+        if (this.settings.headers.spoofIP.customMode !== 'location' || selectedLocationRuleIds.length === 0 || currentRule) {
+          return;
+        }
+      }
+
+      this.tempStore.ipInfo.ruleId = '';
+
       if (this.settings.headers.spoofIP.option === SpoofIPOption.Random) {
         this.tempStore.spoofIP = util.generateIP();
       } else if (this.settings.headers.spoofIP.customMode === 'location') {
         let includeRanges: string[] = [];
         let excludeRanges: string[] = [];
+        let selectedLocationRuleIds: string[] = [];
 
         for (let i = 0; i < this.settings.headers.spoofIP.locationRules.length; i++) {
           let locationRule = this.settings.headers.spoofIP.locationRules[i];
@@ -1047,11 +1336,19 @@ export class Chameleon {
               excludeRanges = excludeRanges.concat(ranges);
             } else {
               includeRanges = includeRanges.concat(ranges);
+              if (selectedRule) {
+                selectedLocationRuleIds.push(selectedRule.id);
+              }
             }
           }
         }
 
         this.tempStore.spoofIP = util.generateIPFromRanges(includeRanges, excludeRanges);
+        let selectedRule = this.findIPRuleByIP(this.tempStore.spoofIP, selectedLocationRuleIds);
+
+        if (selectedRule) {
+          this.tempStore.ipInfo.ruleId = selectedRule.id;
+        }
 
         if (!this.tempStore.spoofIP && util.validateIPRange(this.settings.headers.spoofIP.rangeFrom, this.settings.headers.spoofIP.rangeTo)) {
           let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
@@ -1067,7 +1364,11 @@ export class Chameleon {
 
         this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
       }
+    } else {
+      this.tempStore.spoofIP = '';
+      this.tempStore.ipInfo.ruleId = '';
     }
+
   }
 
   private checkValidOption(settingName: string, settingValue: any, possibleValues: any): any {
@@ -1076,6 +1377,18 @@ export class Chameleon {
         error: false,
       };
     } else if (possibleValues === 'number' && typeof settingValue === 'number') {
+      return {
+        error: false,
+      };
+    } else if (possibleValues === 'screenSize' && this.isValidScreenSize(settingValue)) {
+      return {
+        error: false,
+      };
+    } else if (settingName === 'profile.selected' && settingValue === 'randomSaved') {
+      return {
+        error: false,
+      };
+    } else if (settingName === 'profile.selected' && typeof settingValue === 'string' && settingValue.startsWith('saved:')) {
       return {
         error: false,
       };
@@ -1205,6 +1518,12 @@ export class Chameleon {
       }
 
       for (let i = 0; i < impSettings.ipRules.length; i++) {
+        if (Array.isArray(impSettings.ipRules[i].locales) && impSettings.ipRules[i].locales.length > 0) {
+          impSettings.ipRules[i].lang = impSettings.ipRules[i].locales[0].lang;
+          impSettings.ipRules[i].tz = impSettings.ipRules[i].locales[0].tz;
+          delete impSettings.ipRules[i].locales;
+        }
+
         let options = [
           ['ipRule.lang', impSettings.ipRules[i].lang, languageIds],
           ['ipRule.tz', impSettings.ipRules[i].tz, getTimezones().map(t => t.zone)],
@@ -1276,7 +1595,7 @@ export class Chameleon {
       }
 
       let options = [
-        ['profile.selected', impSettings.profile.selected, profileIds.concat(['none', 'random', 'randomDesktop', 'randomMobile', 'windows', 'macOS', 'linux', 'iOS', 'android'])],
+        ['profile.selected', impSettings.profile.selected, profileIds.concat(['none', 'random', 'randomDesktop', 'randomMobile', 'randomSaved', 'windows', 'macOS', 'linux', 'iOS', 'android'])],
         ['profile.interval.option', impSettings.profile.interval.option, [0, -1, 1, 5, 10, 20, 30, 40, 50, 60]],
         ['profile.interval.min', impSettings.profile.interval.min, 'number'],
         ['profile.interval.max', impSettings.profile.interval.max, 'number'],
@@ -1315,6 +1634,14 @@ export class Chameleon {
         impSettings.headers.spoofIP.customMode = 'range';
       }
 
+      if (typeof impSettings.headers.spoofIP.preserveOnProfileChange !== 'boolean') {
+        impSettings.headers.spoofIP.preserveOnProfileChange = false;
+      }
+
+      if (typeof impSettings.headers.spoofIP.rotateOnlyOnProfileChange !== 'boolean') {
+        impSettings.headers.spoofIP.rotateOnlyOnProfileChange = false;
+      }
+
       if (!Array.isArray(impSettings.headers.spoofIP.locationRules)) {
         impSettings.headers.spoofIP.locationRules = [];
       }
@@ -1341,9 +1668,11 @@ export class Chameleon {
         ['headers.referer.xorigin', impSettings.headers.referer.xorigin, [0, 1, 2]],
         ['headers.referer.trimming', impSettings.headers.referer.trimming, [0, 1, 2]],
         ['headers.spoofAcceptLang.enabled', impSettings.headers.spoofAcceptLang.enabled, 'boolean'],
-        ['headers.spoofAcceptLang.value', impSettings.headers.spoofAcceptLang.value, languageIds.concat(['default', 'ip'])],
+        ['headers.spoofAcceptLang.value', impSettings.headers.spoofAcceptLang.value, languageIds.concat(['default', 'ip', IP_RULE_VALUE])],
         ['headers.spoofIP.enabled', impSettings.headers.spoofIP.enabled, 'boolean'],
         ['headers.spoofIP.option', impSettings.headers.spoofIP.option, [0, 1]],
+        ['headers.spoofIP.preserveOnProfileChange', impSettings.headers.spoofIP.preserveOnProfileChange, 'boolean'],
+        ['headers.spoofIP.rotateOnlyOnProfileChange', impSettings.headers.spoofIP.rotateOnlyOnProfileChange, 'boolean'],
         ['headers.spoofIP.customMode', impSettings.headers.spoofIP.customMode, ['range', 'location']],
         ['headers.spoofIP.locationMode', impSettings.headers.spoofIP.locationMode, ['include', 'exclude']],
       ];
@@ -1410,6 +1739,10 @@ export class Chameleon {
         impSettings.options.blockCSSExfil = false;
       }
 
+      if (!['screen', 'screenAndWindow'].includes(impSettings.options.screenSizeMode)) {
+        impSettings.options.screenSizeMode = 'screenAndWindow';
+      }
+
       let options = [
         ['options.blockMediaDevices', impSettings.options.blockMediaDevices, 'boolean'],
         ['options.disableWebRTC', impSettings.options.disableWebRTC, 'boolean'],
@@ -1427,9 +1760,10 @@ export class Chameleon {
         [
           'options.screenSize',
           impSettings.options.screenSize,
-          ['default', 'profile', '1366x768', '1440x900', '1600x900', '1920x1080', '1920x1200', '2560x1440', '2560x1600', '3840x2160', '4096x2304', '5120x2880'],
+          'screenSize',
         ],
-        ['options.timeZone', impSettings.options.timeZone, timezoneIds.concat(['default', 'ip'])],
+        ['options.screenSizeMode', impSettings.options.screenSizeMode, ['screen', 'screenAndWindow']],
+        ['options.timeZone', impSettings.options.timeZone, timezoneIds.concat(['default', 'ip', IP_RULE_VALUE])],
         ['options.cookieNotPersistent', impSettings.options.cookieNotPersistent, 'boolean'],
         [
           'options.cookiePolicy',
@@ -1629,5 +1963,19 @@ export class Chameleon {
       error: false,
       msg,
     };
+  }
+
+  private isValidScreenSize(value: string): boolean {
+    if (SCREEN_SIZE_VALUES.includes(value)) return true;
+
+    if (typeof value !== 'string') return false;
+
+    let match = /^([1-9]\d{2,4})x([1-9]\d{2,4})$/.exec(value);
+    if (!match) return false;
+
+    let width = Number(match[1]);
+    let height = Number(match[2]);
+
+    return width >= 100 && width <= 10000 && height >= 100 && height <= 10000;
   }
 }

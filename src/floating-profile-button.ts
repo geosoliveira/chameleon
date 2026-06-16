@@ -49,7 +49,8 @@ let createButton = (): void => {
   button = document.createElement('div');
   button.id = BUTTON_ID;
   button.title = browser.i18n.getMessage('floating-profile-button-title') || 'Change Chameleon profile';
-  button.innerHTML = '<span class="chameleon-floating-profile-button-grip"></span><span class="chameleon-floating-profile-button-icon">&#8635;</span>';
+  button.innerHTML =
+    '<span class="chameleon-floating-profile-button-grip"></span><span class="chameleon-floating-profile-button-icon chameleon-floating-profile-button-change">&#8635;</span><span class="chameleon-floating-profile-button-icon chameleon-floating-profile-button-save">+</span>';
 
   let style = document.createElement('style');
   style.textContent = `
@@ -71,7 +72,7 @@ let createButton = (): void => {
       overflow: hidden;
       position: fixed;
       top: 0;
-      width: 58px;
+      width: 86px;
       z-index: 2147483647;
     }
     #${BUTTON_ID} .chameleon-floating-profile-button-grip {
@@ -90,6 +91,10 @@ let createButton = (): void => {
       font-size: 22px;
       line-height: 32px;
       text-align: center;
+    }
+    #${BUTTON_ID} .chameleon-floating-profile-button-save {
+      border-left: 1px solid rgba(255, 255, 255, 0.28);
+      font-size: 20px;
     }
   `;
 
@@ -114,8 +119,9 @@ let createButton = (): void => {
 
     if (moved) return;
 
+    let target = evt.target as HTMLElement;
     browser.runtime.sendMessage({
-      action: 'floatingProfileChange',
+      action: target.classList.contains('chameleon-floating-profile-button-save') ? 'floatingProfileSave' : 'floatingProfileChange',
     });
   });
 };

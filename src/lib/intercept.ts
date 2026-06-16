@@ -162,7 +162,9 @@ class Interceptor {
         profile = this.profileCache[wl.profile];
       }
     } else {
-      if (this.settings.profile.selected != 'none' && !this.settings.excluded.includes(this.settings.profile.selected) && this.tempStore.profile != 'none') {
+      if (this.tempStore.savedProfile) {
+        profile = this.tempStore.savedProfile.profile;
+      } else if (this.settings.profile.selected != 'none' && !this.settings.excluded.includes(this.settings.profile.selected) && this.tempStore.profile != 'none') {
         let profileUsed: string = this.settings.profile.selected.includes('-') ? this.settings.profile.selected : this.tempStore.profile;
         profile = this.profileCache[profileUsed];
       }
@@ -227,7 +229,9 @@ class Interceptor {
           details.requestHeaders[i].value = wl.lang;
         } else {
           if (this.settings.headers.spoofAcceptLang.enabled) {
-            if (this.settings.headers.spoofAcceptLang.value === 'ip') {
+            if (this.tempStore.savedProfile && this.tempStore.savedProfile.language) {
+              details.requestHeaders[i].value = lang.getLanguage(this.tempStore.savedProfile.language).value;
+            } else if (this.settings.headers.spoofAcceptLang.value === 'ip' || this.settings.headers.spoofAcceptLang.value === 'ipRule') {
               if (this.tempStore.ipInfo.lang) {
                 details.requestHeaders[i].value = lang.getLanguage(this.tempStore.ipInfo.lang).value;
               }
@@ -271,19 +275,22 @@ class Interceptor {
       }
     } else {
       if (this.settings.headers.spoofIP.enabled) {
+        let spoofIP = this.tempStore.savedProfile ? this.tempStore.savedProfile.spoofIP : this.tempStore.spoofIP;
+
         if (
           // don't spoof header IP for cloudflare pages
+          spoofIP &&
           !details.url.includes('cdn-cgi/challenge-platform/generate/') &&
           !details.url.includes('__cf_chl_jschl_tk__=') &&
           !details.url.includes('jschal/js/nocookie/transparent.gif')
         ) {
           details.requestHeaders.push({
             name: 'Via',
-            value: '1.1 ' + this.tempStore.spoofIP,
+            value: '1.1 ' + spoofIP,
           });
           details.requestHeaders.push({
             name: 'X-Forwarded-For',
-            value: this.tempStore.spoofIP,
+            value: spoofIP,
           });
         }
       }

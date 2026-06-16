@@ -26,23 +26,25 @@ export default {
       });
     });
 
-    ['innerWidth', 'outerWidth'].forEach((k) => {
-      Object.defineProperty(spoofContext, k, {
-        get: (() => screenData.width).bind(null)
+    if (screenData.spoofWindowSize !== false) {
+      ['innerWidth', 'outerWidth'].forEach((k) => {
+        Object.defineProperty(spoofContext, k, {
+          get: (() => screenData.width).bind(null)
+        });
       });
-    });
 
-    ['innerHeight'].forEach((k) => {
-      Object.defineProperty(spoofContext, k, {
-        get: (() => screenData.availHeight).bind(null)
+      ['innerHeight'].forEach((k) => {
+        Object.defineProperty(spoofContext, k, {
+          get: (() => screenData.availHeight).bind(null)
+        });
       });
-    });
 
-    ['outerHeight'].forEach((k) => {
-      Object.defineProperty(spoofContext, k, {
-        get: (() => screenData.height).bind(null)
+      ['outerHeight'].forEach((k) => {
+        Object.defineProperty(spoofContext, k, {
+          get: (() => screenData.height).bind(null)
+        });
       });
-    });
+    }
 
     Object.defineProperty(spoofContext.Screen.prototype, 'availHeight', {
       get: (() => screenData.availHeight).bind(null)
@@ -52,9 +54,11 @@ export default {
       get: (() => screenData.height).bind(null)
     });
 
-    Object.defineProperty(spoofContext, 'devicePixelRatio', {
-      get: (() => screenData.deviceScaleFactor || 1).bind(null)
-    });
+    if (screenData.spoofWindowSize !== false) {
+      Object.defineProperty(spoofContext, 'devicePixelRatio', {
+        get: (() => screenData.deviceScaleFactor || 1).bind(null)
+      });
+    }
   }
   `,
 };
