@@ -54,11 +54,9 @@ export default {
       get: (() => screenData.height).bind(null)
     });
 
-    if (screenData.spoofWindowSize !== false) {
-      Object.defineProperty(spoofContext, 'devicePixelRatio', {
-        get: (() => screenData.deviceScaleFactor || 1).bind(null)
-      });
-    }
+    Object.defineProperty(spoofContext, 'devicePixelRatio', {
+      get: (() => screenData.deviceScaleFactor || 1).bind(null)
+    });
   }
   `,
 };

@@ -19,6 +19,24 @@ import whitelisted from './whitelisted';
 
 const moment = require('moment-timezone');
 
+// A content script runs in every frame.  A cross-origin iframe is allowed to
+// read its own location, but Firefox deliberately rejects `window.top.location`
+// there.  Use the top-level page when it is same-origin and otherwise fall back
+// to the frame itself; an inaccessible parent must not abort injection.
+function accessiblePageLocation(): { host: string; href: string } {
+  try {
+    return {
+      host: window.top.location.host,
+      href: window.top.location.href,
+    };
+  } catch (error) {
+    return {
+      host: window.location.host,
+      href: window.location.href,
+    };
+  }
+}
+
 class Injector {
   public enabled: boolean;
   private randObjName: string;
@@ -39,7 +57,8 @@ class Injector {
 
     // profile to be used for injection
     let p: any = null;
-    let wl = util.findWhitelistRule(settings.whitelist.rules, window.top.location.host, window.top.location.href);
+    let pageLocation = accessiblePageLocation();
+    let wl = util.findWhitelistRule(settings.whitelist.rules, pageLocation.host, pageLocation.href);
 
     if (wl === null) {
       if (tempStore.savedProfile) {
@@ -138,7 +157,7 @@ class Injector {
 
       if (settings.options.protectWinName) {
         // check if google domain
-        if (!/\.google\.com$/.test(window.top.location.host)) {
+        if (!/\.google\.com$/.test(pageLocation.host)) {
           this.updateInjectionData(winName);
         }
       }
@@ -158,14 +177,20 @@ class Injector {
       }
 
       if (settings.options.screenSize != 'default') {
+        let profileDpr = p && p.screen && p.screen.deviceScaleFactor ? p.screen.deviceScaleFactor : 1;
+        let deviceScaleFactor = settings.options.devicePixelRatio === 'profile' ? profileDpr : Number(settings.options.devicePixelRatio) || 1;
+        let spoofWindowSize = settings.options.screenSizeMode !== 'screen';
+
         if ((settings.options.screenSize == 'profile' || tempStore.savedProfile) && p) {
+          let screenSize = settings.options.screenSize == 'profile' && tempStore.screenSize ? tempStore.screenSize.split('x').map(Number) : [p.screen.width, p.screen.height];
+          let unavailableHeight = Math.max(0, p.screen.height - p.screen.availHeight);
           this.spoof.metadata['screen'] = {
-            width: p.screen.width,
-            height: p.screen.height,
-            availHeight: p.screen.availHeight,
-            deviceScaleFactor: p.screen.deviceScaleFactor,
+            width: screenSize[0],
+            height: screenSize[1],
+            availHeight: Math.max(0, screenSize[1] - unavailableHeight),
+            deviceScaleFactor,
             usingProfileRes: true,
-            spoofWindowSize: settings.options.screenSizeMode !== 'screen',
+            spoofWindowSize,
             pixelDepth: this.spoof.metadata['profileOS'].includes('ios') ? 32 : 24,
           };
         } else {
@@ -174,8 +199,9 @@ class Injector {
           this.spoof.metadata['screen'] = {
             width: scr[0],
             height: scr[1],
+            deviceScaleFactor,
             usingProfileRes: false,
-            spoofWindowSize: settings.options.screenSizeMode !== 'screen',
+            spoofWindowSize,
             pixelDepth: 24,
           };
         }
@@ -725,13 +751,14 @@ class Injector {
 
 // @ts-ignore
 let chameleonInjector = new Injector(settings, tempStore, profileCache, seed, randObjName);
+let pageLocation = accessiblePageLocation();
 
 if (
   chameleonInjector.enabled &&
   whitelisted.findIndex(url => {
-    return window.top.location.href.startsWith(url) || window.location.href.startsWith(url);
+    return pageLocation.href.startsWith(url) || window.location.href.startsWith(url);
   }) == -1 &&
-  !util.isInternalIP(window.top.location.hostname)
+  !util.isInternalIP(pageLocation.host)
 ) {
   chameleonInjector.injectIntoPage();
 }

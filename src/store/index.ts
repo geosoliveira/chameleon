@@ -32,6 +32,8 @@ export default new Vuex.Store({
         option: 0,
         preserveOnProfileChange: false,
         rotateOnlyOnProfileChange: false,
+        rotateLocationWithProfile: false,
+        rotateSubLocationWithProfile: false,
         customMode: 'range',
         rangeFrom: '',
         rangeTo: '',
@@ -43,6 +45,7 @@ export default new Vuex.Store({
     savedProfiles: [],
     profile: {
       selected: 'none',
+      changeOnlyResolution: false,
       interval: {
         option: 0,
         min: 1,
@@ -70,6 +73,7 @@ export default new Vuex.Store({
       resistFingerprinting: false,
       screenSize: 'default',
       screenSizeMode: 'screenAndWindow',
+      devicePixelRatio: 'profile',
       spoofAudioContext: false,
       spoofClientRects: false,
       spoofFontFingerprint: false,

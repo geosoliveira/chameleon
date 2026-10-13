@@ -48,8 +48,8 @@ const BrowserVersions: any = {
   sf: { mac1: '17.6.2', mac2: '18.6', mac3: '26.1', ios1: '17.7.2', ios2: '18.6.2', ios3: '26.0' },
 };
 
-const DesktopResolutions: string[] = ['1366x768', '1440x900', '1600x900', '1920x1080', '1920x1200', '2560x1440', '2560x1600', '3840x2160'];
-const MacResolutions: string[] = ['1920x1080', '2560x1600', '4096x2304', '5120x2880'];
+const DesktopResolutions: string[] = ['1366x768', '1440x900', '1536x864', '1600x900', '1680x1050', '1920x1080', '1920x1200', '2560x1440', '2560x1600', '3440x1440', '3840x2160'];
+const MacResolutions: string[] = ['1440x900', '1680x1050', '1920x1080', '2560x1440', '2560x1600', '3024x1964', '3456x2234', '4096x2304', '5120x2880'];
 
 // operating systems to randomize hardware for
 const randomHW: string[] = ['win1', 'win2', 'win3', 'win4', 'lin1', 'lin2', 'lin3'];

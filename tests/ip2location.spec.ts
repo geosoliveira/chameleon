@@ -1,10 +1,10 @@
 import { queryIP2LocationCSV } from '../src/lib/ip2location';
 
 const csv = [
-  '0,9,BR,Brazil,Sao Paulo,Sao Paulo',
-  '10,19,AR,Argentina,Buenos Aires,Buenos Aires',
-  '20,29,US,United States,California,Los Angeles',
-  '30,39,UY,Uruguay,Montevideo,Montevideo',
+  '0,9,BR,Brazil,Sao Paulo,Sao Paulo,,,,America/Sao_Paulo',
+  '10,19,AR,Argentina,Buenos Aires,Buenos Aires,,,,America/Argentina/Buenos_Aires',
+  '20,29,US,United States,California,Los Angeles,,,,America/Los_Angeles',
+  '30,39,UY,Uruguay,Montevideo,Montevideo,,,,America/Montevideo',
 ].join('\n');
 
 const query = (where: string): string[] => {
@@ -23,18 +23,18 @@ describe('IP2Location SQL-like filters', () => {
   });
 
   test('keeps AND precedence above OR', () => {
-    expect(query('country = Brazil OR country = Argentina AND region = California')).toEqual([
-      '0.0.0.0-0.0.0.9',
-    ]);
+    expect(query('country = Brazil OR country = Argentina AND region = California')).toEqual(['0.0.0.0-0.0.0.9']);
   });
 
   test('supports parentheses to override precedence', () => {
-    expect(query('(country = Brazil OR country = Argentina) AND region = Buenos Aires')).toEqual([
-      '0.0.0.10-0.0.0.19',
-    ]);
+    expect(query('(country = Brazil OR country = Argentina) AND region = Buenos Aires')).toEqual(['0.0.0.10-0.0.0.19']);
   });
 
   test('supports English macro aliases', () => {
     expect(query('macro = latin america')).toEqual(['0.0.0.0-0.0.0.19', '0.0.0.30-0.0.0.39']);
+  });
+
+  test('supports timezone filters from DB11 rows', () => {
+    expect(query('timezone = America/Sao_Paulo')).toEqual(['0.0.0.0-0.0.0.9']);
   });
 });

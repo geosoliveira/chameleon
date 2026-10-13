@@ -383,28 +383,52 @@
               <option value="1" v-t="'popup-headers-spoofIP-custom.message'"></option>
             </select>
           </label>
-          <label class="ml-6 mt-2 cursor-pointer">
-            <input
-              id="spoofIPPreserveOnProfileChange"
-              @change="changeSetting($event)"
-              :checked="settings.headers.spoofIP.preserveOnProfileChange"
-              name="headers.spoofIP.preserveOnProfileChange"
-              type="checkbox"
-              class="text-primary form-checkbox cursor-pointer"
-            />
-            <span class="ml-1" v-t="'popup-headers-spoofIP-preserveOnProfileChange.message'"></span>
-          </label>
-          <label class="ml-6 mt-2 cursor-pointer">
-            <input
-              id="spoofIPRotateOnlyOnProfileChange"
-              @change="changeSetting($event)"
-              :checked="settings.headers.spoofIP.rotateOnlyOnProfileChange"
-              name="headers.spoofIP.rotateOnlyOnProfileChange"
-              type="checkbox"
-              class="text-primary form-checkbox cursor-pointer"
-            />
-            <span class="ml-1" v-t="'popup-headers-spoofIP-rotateOnlyOnProfileChange.message'"></span>
-          </label>
+          <div class="ml-6 mt-2 flex flex-col">
+            <label class="cursor-pointer">
+              <input
+                @change="setProfileChangeIPMode('both')"
+                :checked="!settings.headers.spoofIP.preserveOnProfileChange && !settings.headers.spoofIP.rotateOnlyOnProfileChange"
+                name="spoofIPProfileChangeMode"
+                type="radio"
+                class="text-primary form-radio cursor-pointer"
+              />
+              <span class="ml-1">Change profile and IP when changing profile</span>
+            </label>
+            <label class="mt-1 cursor-pointer">
+              <input
+                id="spoofIPPreserveOnProfileChange"
+                @change="setProfileChangeIPMode('keepIP')"
+                :checked="settings.headers.spoofIP.preserveOnProfileChange"
+                name="spoofIPProfileChangeMode"
+                type="radio"
+                class="text-primary form-radio cursor-pointer"
+              />
+              <span class="ml-1" v-t="'popup-headers-spoofIP-preserveOnProfileChange.message'"></span>
+            </label>
+            <label class="mt-1 cursor-pointer">
+              <input
+                id="spoofIPRotateOnlyOnProfileChange"
+                @change="setProfileChangeIPMode('ipOnly')"
+                :checked="!settings.headers.spoofIP.preserveOnProfileChange && settings.headers.spoofIP.rotateOnlyOnProfileChange"
+                name="spoofIPProfileChangeMode"
+                type="radio"
+                class="text-primary form-radio cursor-pointer"
+              />
+              <span class="ml-1" v-t="'popup-headers-spoofIP-rotateOnlyOnProfileChange.message'"></span>
+            </label>
+            <label class="mt-2" :class="canRotateResolutionOnly ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'">
+              <input
+                id="changeOnlyResolution"
+                @change="changeSetting($event)"
+                :checked="settings.profile.changeOnlyResolution"
+                name="profile.changeOnlyResolution"
+                type="checkbox"
+                class="text-primary form-checkbox cursor-pointer"
+                :disabled="!canRotateResolutionOnly"
+              />
+              <span class="ml-1">Change only resolution when changing profile</span>
+            </label>
+          </div>
           <div v-show="settings.headers.spoofIP.option == 1" class="ml-6 mt-2">
             <div class="flex mb-2">
               <label class="mr-2">
@@ -479,14 +503,38 @@
               <div v-if="selectedLocationRules.length" class="mt-2">
                 <div v-for="rule in selectedLocationRules" :key="rule.id + rule.action" class="flex justify-between items-center text-mini py-1">
                   <span>
-                    {{ rule.name }}<span v-if="rule.id !== allIPRuleId"> ({{ rule.ips.length }})</span>
-                    <span class="opacity-75">({{ rule.action === 'include' ? $t('popup-headers-spoofIP-locationRuleInclude.message') : $t('popup-headers-spoofIP-locationRuleExclude.message') }})</span>
+                    {{ locationRuleLabel(rule) }}
+                    <span class="opacity-75"
+                      >({{ rule.action === 'include' ? $t('popup-headers-spoofIP-locationRuleInclude.message') : $t('popup-headers-spoofIP-locationRuleExclude.message') }})</span
+                    >
                   </span>
                   <button @click="removeLocationRule(rule.id, rule.action)" class="px-1">
                     <feather type="x" size="1em"></feather>
                   </button>
                 </div>
               </div>
+              <label class="block mt-3" :class="settings.headers.spoofIP.preserveOnProfileChange ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
+                <input
+                  @change="changeSetting($event)"
+                  :checked="settings.headers.spoofIP.rotateLocationWithProfile"
+                  name="headers.spoofIP.rotateLocationWithProfile"
+                  type="checkbox"
+                  class="text-primary form-checkbox cursor-pointer"
+                  :disabled="settings.headers.spoofIP.preserveOnProfileChange"
+                />
+                <span class="ml-1">Rotate location with profile</span>
+              </label>
+              <label class="block mt-2" :class="settings.headers.spoofIP.preserveOnProfileChange ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'">
+                <input
+                  @change="changeSetting($event)"
+                  :checked="settings.headers.spoofIP.rotateSubLocationWithProfile"
+                  name="headers.spoofIP.rotateSubLocationWithProfile"
+                  type="checkbox"
+                  class="text-primary form-checkbox cursor-pointer"
+                  :disabled="settings.headers.spoofIP.preserveOnProfileChange"
+                />
+                <span class="ml-1">Rotate city within location with profile</span>
+              </label>
             </div>
           </div>
         </div>
@@ -701,13 +749,7 @@
               <div class="flex items-center mb-2">
                 <label class="w-full mt-2">
                   <span v-t="'popup-options-injection-screen.message'"></span>
-                  <select
-                    id="screenSize"
-                    @change="setScreenSize($event)"
-                    :value="screenSizeSelectValue"
-                    name="options.screenSize"
-                    class="form-select mt-1 block w-full text-mini"
-                  >
+                  <select id="screenSize" @change="setScreenSize($event)" :value="screenSizeSelectValue" name="options.screenSize" class="form-select mt-1 block w-full text-mini">
                     <option value="default" v-t="'text-default.message'"></option>
                     <option value="profile" v-t="'text-profile.message'"></option>
                     <option v-for="size in screenSizePresets" :key="size" :value="size">{{ size }}</option>
@@ -722,7 +764,7 @@
                     name="options.screenSize"
                     class="block w-full form-input text-mini mt-2"
                     autocomplete="off"
-                    placeholder="390x844"
+                    placeholder="1024x768"
                   />
                   <select
                     v-show="settings.options.screenSize !== 'default'"
@@ -732,9 +774,21 @@
                     name="options.screenSizeMode"
                     class="form-select mt-2 block w-full text-mini"
                   >
-                    <option value="screen" v-t="'popup-options-injection-screenModeScreen.message'"></option>
-                    <option value="screenAndWindow" v-t="'popup-options-injection-screenModeScreenAndWindow.message'"></option>
+                    <option value="screenAndWindow">Screen + window size</option>
+                    <option value="screen">Screen only</option>
                   </select>
+                  <div v-show="settings.options.screenSize !== 'default'" class="mt-2">
+                    <span>Device pixel ratio</span>
+                    <select
+                      id="devicePixelRatio"
+                      @change="changeSetting($event)"
+                      :value="settings.options.devicePixelRatio"
+                      name="options.devicePixelRatio"
+                      class="form-select mt-1 block w-full text-mini"
+                    >
+                      <option v-for="ratio in devicePixelRatioOptions" :key="ratio" :value="ratio">{{ ratio === 'profile' ? 'Profile' : ratio }}</option>
+                    </select>
+                  </div>
                 </label>
               </div>
               <div class="flex items-center mb-2">
@@ -964,30 +1018,11 @@ import * as prof from '../lib/profiles';
 import * as tz from '../lib/tz';
 import util from '../lib/util';
 import webext from '../lib/webext';
+import { DevicePixelRatioOptions, ScreenSizePresets } from '../lib/screen-size';
 
 const ALL_IP_RULE_ID = '__all__';
-const SCREEN_SIZE_PRESETS = [
-  '320x568',
-  '360x640',
-  '375x667',
-  '390x844',
-  '414x896',
-  '768x1024',
-  '800x600',
-  '1024x768',
-  '1280x720',
-  '1280x800',
-  '1366x768',
-  '1440x900',
-  '1600x900',
-  '1920x1080',
-  '1920x1200',
-  '2560x1440',
-  '2560x1600',
-  '3840x2160',
-  '4096x2304',
-  '5120x2880',
-];
+const DEVICE_PIXEL_RATIO_OPTIONS = DevicePixelRatioOptions;
+const SCREEN_SIZE_PRESETS = ScreenSizePresets;
 
 @Component
 export default class App extends Vue {
@@ -1016,6 +1051,7 @@ export default class App extends Vue {
   public profileTimeout: any = null;
   public profiles: any = new prof.Generator().getAllProfiles();
   public screenSizePresets: string[] = SCREEN_SIZE_PRESETS;
+  public devicePixelRatioOptions: string[] = DEVICE_PIXEL_RATIO_OPTIONS;
   public timezones: tz.Timezone[] = tz.getTimezones();
   public usingCustomScreenSize: boolean = false;
   public tmp = {
@@ -1163,13 +1199,25 @@ export default class App extends Vue {
     return false;
   }
 
+  get canRotateResolutionOnly(): boolean {
+    return this.settings.options.screenSize === 'profile' && !this.settings.headers.spoofIP.rotateOnlyOnProfileChange;
+  }
+
   get canUseChangeProfileButton(): boolean {
-    return this.isRandomProfile || (this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange);
+    return (
+      this.isRandomProfile ||
+      (this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange) ||
+      (this.settings.profile.changeOnlyResolution && this.settings.options.screenSize === 'profile' && this.settings.profile.selected !== 'none')
+    );
   }
 
   get changeProfileButtonLabel(): string {
     if (this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange) {
       return this.$t('popup-home-changeIP.message') as string;
+    }
+
+    if (this.settings.profile.changeOnlyResolution && this.settings.options.screenSize === 'profile') {
+      return 'Change resolution';
     }
 
     return this.$t('popup-home-change.message') as string;
@@ -1218,7 +1266,8 @@ export default class App extends Vue {
   }
 
   get version(): string {
-    return browser.runtime.getManifest().version_name;
+    const manifest: any = browser.runtime.getManifest();
+    return manifest.version_name || manifest.version;
   }
 
   activeTab(tab: string): string[] {
@@ -1262,6 +1311,26 @@ export default class App extends Vue {
         this.resizeProfileList();
       });
     }
+  }
+
+  async setProfileChangeIPMode(mode: string): Promise<void> {
+    let preserveIP = mode === 'keepIP';
+    let rotateIPOnly = mode === 'ipOnly';
+    let payload = [
+      { name: 'headers.spoofIP.preserveOnProfileChange', value: preserveIP },
+      { name: 'headers.spoofIP.rotateOnlyOnProfileChange', value: rotateIPOnly },
+    ];
+
+    if (preserveIP) {
+      payload.push({ name: 'headers.spoofIP.rotateLocationWithProfile', value: false });
+      payload.push({ name: 'headers.spoofIP.rotateSubLocationWithProfile', value: false });
+    }
+
+    if (rotateIPOnly) {
+      payload.push({ name: 'profile.changeOnlyResolution', value: false });
+    }
+    await this['$store'].dispatch('changeSetting', payload);
+    webext.sendToBackground(this.settings);
   }
 
   async created() {
@@ -1324,7 +1393,7 @@ export default class App extends Vue {
     this.tmp.intervalMin = this.settings.profile.interval.min;
     this.tmp.rangeFrom = this.settings.headers.spoofIP.rangeFrom;
     this.tmp.rangeTo = this.settings.headers.spoofIP.rangeTo;
-    this.tmp.screenSizeCustom = this.screenSizeSelectValue === 'custom' ? this.settings.options.screenSize : '390x844';
+    this.tmp.screenSizeCustom = this.screenSizeSelectValue === 'custom' ? this.settings.options.screenSize : '1024x768';
     this.usingCustomScreenSize = this.screenSizeSelectValue === 'custom';
   }
 
@@ -1375,7 +1444,8 @@ export default class App extends Vue {
   }
 
   locationRuleLabel(rule: any): string {
-    return rule.id === ALL_IP_RULE_ID ? rule.name : `${rule.name} (${rule.ips.length})`;
+    let count = Array.isArray(rule.locations) && rule.locations.length ? rule.locations.reduce((sum, location) => sum + Number(location.recordCount || 0), 0) : rule.ips.length;
+    return rule.id === ALL_IP_RULE_ID ? rule.name : rule.name + ' (' + count + ')';
   }
 
   isSelected(type: string, value: string): boolean {
@@ -1489,7 +1559,7 @@ export default class App extends Vue {
 
     if (value === 'custom') {
       if (!this.isValidScreenSize(this.tmp.screenSizeCustom)) {
-        this.tmp.screenSizeCustom = '390x844';
+        this.tmp.screenSizeCustom = '1024x768';
       }
 
       value = this.tmp.screenSizeCustom;

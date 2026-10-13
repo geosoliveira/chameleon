@@ -81,6 +81,7 @@ const config = {
       { from: 'popup/popup.html', to: 'popup/popup.html', transform: transformHtml },
       { from: 'options/options.html', to: 'options/options.html', transform: transformHtml },
       { from: '_locales', to: '_locales' },
+      { from: 'ip-location-db', to: 'ip-location-db', noErrorOnMissing: true },
       {
         from: 'manifest.json',
         to: 'manifest.json',

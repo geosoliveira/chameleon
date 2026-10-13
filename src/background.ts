@@ -179,10 +179,14 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
       chameleon.settings.headers.spoofIP.locationMode = request.data[0].value;
     } else if (request.data[0].name === 'headers.spoofIP.locationRules') {
       chameleon.settings.headers.spoofIP.locationRules = request.data[0].value;
+    } else if (request.data[0].name === 'headers.spoofIP.rotateLocationWithProfile') {
+      chameleon.settings.headers.spoofIP.rotateLocationWithProfile = request.data[0].value;
+    } else if (request.data[0].name === 'headers.spoofIP.rotateSubLocationWithProfile') {
+      chameleon.settings.headers.spoofIP.rotateSubLocationWithProfile = request.data[0].value;
     }
 
     (async () => {
-      chameleon.updateSpoofIP({
+      await chameleon.updateSpoofIP({
         preserveCurrent: chameleon.settings.headers.spoofIP.preserveOnProfileChange,
       });
       await chameleon.updateSpoofIPInfo();
@@ -198,7 +202,7 @@ let messageHandler = (request: any, sender: any, sendResponse: any) => {
     chameleon.settings.ipRules = request.data;
     (async () => {
       chameleon.cleanSettings();
-      chameleon.updateSpoofIP({
+      await chameleon.updateSpoofIP({
         preserveCurrent: chameleon.settings.headers.spoofIP.preserveOnProfileChange,
       });
       await chameleon.updateSpoofIPInfo();
@@ -258,6 +262,7 @@ browser.runtime.onMessage.addListener(messageHandler);
 (async () => {
   await chameleon.init(await webext.getSettings(null));
 
+  chameleon.setupHeaderListeners();
   if (chameleon.settings.options.timeZone === 'ip' || (chameleon.settings.headers.spoofAcceptLang.value === 'ip' && chameleon.settings.headers.spoofAcceptLang.enabled)) {
     setTimeout(() => {
       chameleon.updateIPInfo();
@@ -268,7 +273,7 @@ browser.runtime.onMessage.addListener(messageHandler);
   ) {
     setTimeout(() => {
       (async () => {
-        chameleon.updateSpoofIP();
+        await chameleon.updateSpoofIP();
         await chameleon.updateSpoofIPInfo();
         chameleon.updateProfileCache();
         chameleon.buildInjectionScript();
@@ -280,8 +285,6 @@ browser.runtime.onMessage.addListener(messageHandler);
   if (!!browser.privacy) {
     await chameleon.changeBrowserSettings();
   }
-
-  chameleon.setupHeaderListeners();
   chameleon.setTimer();
 
   webext.enableChameleon(chameleon.settings.config.enabled);
@@ -292,7 +295,8 @@ browser.runtime.onMessage.addListener(messageHandler);
 
     Enabled only in developer builds
   */
-  if (browser.runtime.getManifest().version_name.includes('-')) {
+  const manifest: any = browser.runtime.getManifest();
+  if ((manifest.version_name || manifest.version).includes('-')) {
     browser.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
       messageHandler(request, sender, sendResponse);
 

@@ -51,6 +51,16 @@ The UI is near identical and contains most of the features found in the original
 
 Please note that WebExtensions are unable to modify about:config entries.
 
+### Local IP2Location DB11
+
+For a private build, the IP Rule editor can fill ranges from country, macroregion, region, city, or timezone using a generated local DB11 index. Generate it from the repository root before building the extension:
+
+```powershell
+node scripts\build-ip2location-db11.js --input "C:\Users\george.s.oliveira\Downloads\IP2LOCATION-LITE-DB11.CSV\IP2LOCATION-LITE-DB11.CSV"
+```
+
+The generator writes untracked assets to `src/ip-location-db`. Pass `--max-search-items 30000` to limit the searchable index when a smaller build is preferred.
+
 ### Whitelist
 
 - Use your real or spoofed profile for whitelisted sites

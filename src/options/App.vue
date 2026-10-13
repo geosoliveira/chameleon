@@ -200,7 +200,7 @@
             <tbody>
               <tr v-for="r in settings.ipRules" :key="r.id" class="flex flex-col px-2 border-b-2 md:table-row text-left">
                 <td class="flex justify-between py-4 mr-8">
-                  <span class="max-w-lg truncate">{{ r.name }} ({{ r.ips.length }})</span>
+                  <span class="max-w-lg truncate">{{ ipRuleTableName(r) }}</span>
                   <div>
                     <button @click="editIPRule(r.id)" class="px-2">
                       <feather type="edit-2" size="1em"></feather>
@@ -210,8 +210,17 @@
                     </button>
                   </div>
                 </td>
-                <td class="py-4">{{ getLangName(r.lang) }}</td>
-                <td class="py-4">{{ r.tz }}</td>
+                <td
+                  class="py-4"
+                  :title="
+                    ipRuleLanguages(r)
+                      .map(getLangName)
+                      .join(', ')
+                  "
+                >
+                  {{ ipRuleLanguageLabel(r) }}
+                </td>
+                <td class="py-4" :title="ipRuleTimezones(r).join(', ')">{{ ipRuleTimezoneLabel(r) }}</td>
               </tr>
             </tbody>
           </table>
@@ -263,70 +272,59 @@
                   </label>
                   <input v-model="tmp.ipRule.name" name="headers.spoofIP.rangeFrom" class="block w-full form-input" :class="{ error: errors.ipRuleName }" />
                 </div>
-                <div class="flex flex-col md:flex-row items-center mb-4">
-                  <label class="md:mr-2 mb-4 md:mb-0 w-full md:w-1/2">
-                    <span class="text-dark" v-t="'text-language.message'"></span>
-                    <select v-model="tmp.ipRule.lang" class="form-select mt-1 block w-full">
-                      <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
-                    </select>
-                  </label>
-                  <label class="md:ml-2 w-full md:w-1/2">
-                    <span class="text-dark" v-t="'text-timezone.message'"></span>
-                    <select v-model="tmp.ipRule.tz" class="form-select mt-1 block w-full">
-                      <option v-for="t in timezones" :key="t.zone" :value="t.zone">({{ t.offset }}) {{ t.zone }}</option>
-                    </select>
-                  </label>
-                </div>
                 <div>
                   <div class="border-t border-b py-4 mb-4">
-                    <div class="mb-2" v-t="'options-ipRules-autofillTitle.message'"></div>
-                    <div class="flex flex-col md:flex-row items-center mb-2">
-                      <label class="w-full md:w-1/2 md:mr-2 mb-2 md:mb-0">
-                        <span class="text-dark" v-t="'options-ipRules-autofillWhere.message'"></span>
-                        <input v-model="tmp.ipRuleAutoFill.where" class="block w-full form-input" placeholder="country = Brazil" />
-                      </label>
-                      <label class="w-full md:w-1/2 md:ml-2">
-                        <span class="text-dark" v-t="'options-ipRules-autofillMergeWhere.message'"></span>
-                        <input v-model="tmp.ipRuleAutoFill.mergeWhere" class="block w-full form-input" placeholder="country IN (Argentina, Uruguay)" />
-                      </label>
-                    </div>
-                    <div class="flex flex-col md:flex-row items-center">
-                      <label class="w-full md:w-2/5 md:mr-2 mb-2 md:mb-0">
-                        <span class="text-dark" v-t="'options-ipRules-autofillMode.message'"></span>
-                        <select v-model="tmp.ipRuleAutoFill.mode" class="form-select mt-1 block w-full">
-                          <option value="listar_blocos_corresponde" v-t="'options-ipRules-autofillModeListMatch.message'"></option>
-                          <option value="listar_blocos_nao_corresponde" v-t="'options-ipRules-autofillModeListNotMatch.message'"></option>
-                          <option value="maior_bloco_corresponde" v-t="'options-ipRules-autofillModeLargestMatch.message'"></option>
-                          <option value="menor_bloco_corresponde" v-t="'options-ipRules-autofillModeSmallestMatch.message'"></option>
-                          <option value="maior_bloco_nao_corresponde" v-t="'options-ipRules-autofillModeLargestNotMatch.message'"></option>
-                          <option value="menor_bloco_nao_corresponde" v-t="'options-ipRules-autofillModeSmallestNotMatch.message'"></option>
-                        </select>
+                    <div class="flex flex-col md:flex-row items-end">
+                      <label class="w-full md:w-3/5 md:mr-2 mb-2 md:mb-0">
+                        <span class="text-dark">Country, macroregion, region, city, or timezone</span>
+                        <input v-model="tmp.ipRuleInternal.query" class="block w-full form-input" placeholder="Brazil, Fortaleza, America/Fortaleza" />
                       </label>
                       <label class="w-full md:w-1/5 md:mx-2 mb-2 md:mb-0">
-                        <span class="text-dark" v-t="'options-ipRules-autofillSort.message'"></span>
-                        <select v-model="tmp.ipRuleAutoFill.sortSize" class="form-select mt-1 block w-full">
-                          <option value="desc" v-t="'options-ipRules-autofillSortDesc.message'"></option>
-                          <option value="asc" v-t="'options-ipRules-autofillSortAsc.message'"></option>
+                        <span class="text-dark">Type</span>
+                        <select v-model="tmp.ipRuleInternal.type" class="form-select mt-1 block w-full">
+                          <option value="auto">Auto</option>
+                          <option value="country">Country</option>
+                          <option value="macro">Macroregion</option>
+                          <option value="region">Region</option>
+                          <option value="city">City</option>
+                          <option value="timezone">Timezone</option>
                         </select>
-                      </label>
-                      <label class="w-full md:w-1/5 md:mx-2 mb-2 md:mb-0">
-                        <span class="text-dark" v-t="'options-ipRules-autofillLimit.message'"></span>
-                        <input v-model.number="tmp.ipRuleAutoFill.limit" class="block w-full form-input" type="number" min="0" />
-                      </label>
-                      <label class="w-full md:w-1/5 md:ml-2">
-                        <span class="text-dark" v-t="'options-ipRules-autofillCSV.message'"></span>
-                        <input @change="readIP2LocationCSV($event)" class="block w-full text-sm" type="file" accept=".csv,text/csv" />
                       </label>
                     </div>
                     <div class="mt-3 text-sm">
-                      <div class="mb-1" v-t="'options-ipRules-autofillMacros.message'"></div>
+                      <div class="mb-1">Available macros</div>
                       <div class="flex flex-wrap gap-2">
                         <span v-for="macro in macroRegions" :key="macro.value" class="px-2 py-1 bg-gray-200 text-gray-800 rounded-sm" :title="macro.countries.join(', ')">
                           {{ macro.value }}
                         </span>
                       </div>
                     </div>
-                    <div v-if="tmp.ipRuleAutoFill.status" class="mt-2 text-sm" :class="{ error: errors.ipRuleAutoFill }">{{ tmp.ipRuleAutoFill.status }}</div>
+                    <div class="flex flex-col md:flex-row items-end mt-4">
+                      <label class="w-full md:w-2/5 md:mr-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'text-language.message'"></span>
+                        <select v-model="tmp.ipRule.lang" class="form-select mt-1 block w-full">
+                          <option v-for="l in languages" :key="l.code" :value="l.code">{{ l.name }}</option>
+                        </select>
+                      </label>
+                      <label class="w-full md:w-2/5 md:mx-2 mb-2 md:mb-0">
+                        <span class="text-dark" v-t="'text-timezone.message'"></span>
+                        <select v-model="tmp.ipRule.tz" class="form-select mt-1 block w-full">
+                          <option v-for="t in timezones" :key="t.zone" :value="t.zone">({{ t.offset }}) {{ t.zone }}</option>
+                        </select>
+                      </label>
+                      <button @click="autofillIPRuleLocation" type="button" class="bg-primary hover:bg-primary-dark text-white py-2 px-4 border rounded">Autofill</button>
+                    </div>
+                    <div class="mt-4">
+                      <button @click="fillIPRuleFromInternalDB" type="button" class="bg-primary hover:bg-primary-dark text-white py-2 px-4 border rounded">Add location</button>
+                    </div>
+                    <div v-if="tmp.ipRuleInternal.status" class="mt-2 text-sm" :class="{ error: errors.ipRuleInternal }">{{ tmp.ipRuleInternal.status }}</div>
+                    <div v-if="tmp.ipRule.locations.length" class="mt-3 flex flex-wrap gap-2">
+                      <span v-for="(location, index) in tmp.ipRule.locations" :key="location.key" class="inline-flex items-center px-2 py-1 bg-gray-200 text-gray-800 rounded-sm">
+                        {{ location.label }}
+                        <span class="ml-2 text-sm text-gray-600">{{ location.language || tmp.ipRule.lang }} | {{ locationTimezoneLabel(location) }}</span>
+                        <button @click="removeIPRuleLocation(index)" type="button" class="ml-2" title="Remove location">x</button>
+                      </span>
+                    </div>
                   </div>
                   <div class="mb-2" v-t="'options-ipRules-textareaLabel.message'"></div>
                   <textarea
@@ -530,7 +528,7 @@ import * as prof from '../lib/profiles';
 import * as tz from '../lib/tz';
 import util from '../lib/util';
 import webext from '../lib/webext';
-import { getMacroRegions, queryIP2LocationCSV } from '../lib/ip2location';
+import { getMacroRegions } from '../lib/ip2location';
 import { Component } from 'vue-property-decorator';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -560,7 +558,7 @@ export default class App extends Vue {
   public errors: any = {
     ipRuleName: false,
     ipRuleIPs: false,
-    ipRuleAutoFill: false,
+    ipRuleInternal: false,
     wlRuleName: false,
     wlRuleIP: false,
     wlRuleSites: false,
@@ -569,6 +567,7 @@ export default class App extends Vue {
   private isLegacyVersion: boolean = false;
   private savingIPRule: boolean = false;
   private savingWLRule: boolean = false;
+  private internalDbIndex: Promise<any> = null;
   public importError: any = {
     error: false,
     msg: '',
@@ -582,13 +581,11 @@ export default class App extends Vue {
       lang: '',
       tz: '',
       ips: '',
+      locations: [],
     },
-    ipRuleAutoFill: {
-      where: '',
-      mergeWhere: '',
-      mode: 'listar_blocos_corresponde',
-      sortSize: 'desc',
-      limit: 0,
+    ipRuleInternal: {
+      query: '',
+      type: 'auto',
       status: '',
     },
     wlRule: {
@@ -659,7 +656,8 @@ export default class App extends Vue {
 
   async created(): Promise<void> {
     this.iconPath = browser.runtime.getURL('icons/icon.svg');
-    this.version = browser.runtime.getManifest().version_name;
+    const manifest: any = browser.runtime.getManifest();
+    this.version = manifest.version_name || manifest.version;
     this.platform = (await browser.runtime.getPlatformInfo()).os;
     this.isLegacyVersion = parseInt(await browser.runtime.getBrowserInfo().version) < 75;
 
@@ -713,6 +711,10 @@ export default class App extends Vue {
     this.tmp.ipRule.lang = lang;
     this.tmp.ipRule.tz = this.timezones[0].zone;
     this.tmp.ipRule.ips = '';
+    this.tmp.ipRule.locations = [];
+    this.tmp.ipRuleInternal.query = '';
+    this.tmp.ipRuleInternal.type = 'auto';
+    this.tmp.ipRuleInternal.status = '';
 
     this.showModal = true;
     this.modalType = Modal.IP_RULE;
@@ -751,6 +753,10 @@ export default class App extends Vue {
       this.tmp.ipRule.lang = rule.lang;
       this.tmp.ipRule.tz = rule.tz;
       this.tmp.ipRule.ips = rule.ips.join('\n');
+      this.tmp.ipRule.locations = JSON.parse(JSON.stringify(rule.locations || []));
+      this.tmp.ipRuleInternal.query = '';
+      this.tmp.ipRuleInternal.type = 'auto';
+      this.tmp.ipRuleInternal.status = '';
 
       this.showModal = true;
       this.modalType = Modal.IP_RULE;
@@ -845,6 +851,34 @@ export default class App extends Vue {
     return lang.getLanguage(langCode).name;
   }
 
+  ipRuleTableName(rule: any): string {
+    let count = Array.isArray(rule.locations) ? rule.locations.length : 0;
+    let rangeCount = count ? rule.locations.reduce((total, location) => total + Number(location.recordCount || (location.records || []).length), 0) : rule.ips.length;
+    return count
+      ? rule.name + ' (' + count + ' location' + (count === 1 ? '' : 's') + ', ' + rangeCount + ' range' + (rangeCount === 1 ? '' : 's') + ')'
+      : rule.name + ' (' + rule.ips.length + ')';
+  }
+
+  ipRuleLanguages(rule: any): string[] {
+    let values = Array.isArray(rule.locations) ? rule.locations.map(location => location.language).filter(Boolean) : [];
+    return Array.from(new Set(values.length ? values : [rule.lang]));
+  }
+
+  ipRuleTimezones(rule: any): string[] {
+    let values = Array.isArray(rule.locations) ? rule.locations.map(location => location.timezone).filter(Boolean) : [];
+    return Array.from(new Set(values.length ? values : [rule.tz]));
+  }
+
+  ipRuleLanguageLabel(rule: any): string {
+    let values = this.ipRuleLanguages(rule);
+    return values.length === 1 ? this.getLangName(values[0]) : 'Multiple (' + values.length + ')';
+  }
+
+  ipRuleTimezoneLabel(rule: any): string {
+    let values = this.ipRuleTimezones(rule);
+    return values.length === 1 ? values[0] : 'Multiple (' + values.length + ')';
+  }
+
   formatDate(value: string): string {
     return value ? new Date(value).toLocaleString() : '';
   }
@@ -926,47 +960,361 @@ export default class App extends Vue {
     reader.readAsText((evt.target as any).files[0]);
   }
 
-  readIP2LocationCSV(evt: Event): void {
-    let file = (evt.target as any).files[0];
+  async fillIPRuleFromInternalDB(): Promise<void> {
+    this.errors.ipRuleInternal = false;
+    this.tmp.ipRuleInternal.status = '';
 
-    if (!file) return;
+    try {
+      let { selected, selectedRows } = await this.resolveIPRuleInternalLocation();
+      let key = [selected.type, selected.value, (selected.countryCodes || []).join(',')].join('|');
+      let location = {
+        key,
+        type: selected.type,
+        value: selected.value,
+        label: selected.label || selected.value,
+        countryCodes: selected.countryCodes || [],
+        language: this.tmp.ipRule.lang,
+        timezone: this.tmp.ipRule.tz,
+        recordCount: selectedRows.length,
+      };
+      let locationIndex = this.tmp.ipRule.locations.findIndex(item => item.key === key);
+      if (locationIndex === -1) this.tmp.ipRule.locations.push(location);
+      else this.$set(this.tmp.ipRule.locations, locationIndex, location);
 
-    if (!this.tmp.ipRuleAutoFill.where.trim()) {
-      this.errors.ipRuleAutoFill = true;
-      this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillMissingWhere.message') as string;
-      return;
+      this.errors.ipRuleInternal = false;
+      this.tmp.ipRuleInternal.status = location.label + ' added (' + selectedRows.length + ' source range(s)).';
+    } catch (err) {
+      this.errors.ipRuleInternal = true;
+      this.tmp.ipRuleInternal.status = err.message || String(err);
+    }
+  }
+
+  async autofillIPRuleLocation(): Promise<void> {
+    this.errors.ipRuleInternal = false;
+    this.tmp.ipRuleInternal.status = '';
+
+    try {
+      let { selected, selectedRows } = await this.resolveIPRuleInternalLocation();
+      this.applyLocationDefaults(selected, selectedRows);
+      this.tmp.ipRuleInternal.status = (selected.label || selected.value) + ' autofilled.';
+    } catch (err) {
+      this.errors.ipRuleInternal = true;
+      this.tmp.ipRuleInternal.status = err.message || String(err);
+    }
+  }
+
+  async resolveIPRuleInternalLocation(): Promise<any> {
+    let query = this.normalizeLocationQuery(this.tmp.ipRuleInternal.query);
+    if (!query) throw new Error('Enter a location or timezone.');
+
+    let selected: any;
+    let type = this.tmp.ipRuleInternal.type;
+    let macro = this.macroRegions.find(item => this.normalizeLocationQuery(item.value) === query);
+
+    if ((type === 'auto' || type === 'macro') && macro) {
+      selected = { type: 'macro', value: macro.value, label: macro.value, countryCodes: macro.countries };
+    } else {
+      let index = await this.loadInternalDBIndex();
+      let matches = (index.search || []).filter(item => {
+        return (
+          (type === 'auto' || item.type === type) && (item.q === query || this.normalizeLocationQuery(item.label) === query || this.normalizeLocationQuery(item.value) === query)
+        );
+      });
+
+      if (!matches.length) {
+        matches = (index.search || []).filter(item => {
+          return (type === 'auto' || item.type === type) && String(item.q || '').includes(query);
+        });
+      }
+
+      selected = matches[0];
     }
 
-    this.errors.ipRuleAutoFill = false;
-    this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillLoading.message') as string;
+    if (!selected || !selected.countryCodes || !selected.countryCodes.length) {
+      throw new Error('No matching location was found in the local database.');
+    }
 
-    let reader = new FileReader();
-
-    reader.onload = (e: any): void => {
-      try {
-        let ranges = queryIP2LocationCSV(e.target.result, {
-          where: this.tmp.ipRuleAutoFill.where,
-          mergeWhere: this.tmp.ipRuleAutoFill.mergeWhere,
-          mode: this.tmp.ipRuleAutoFill.mode,
-          sortSize: this.tmp.ipRuleAutoFill.sortSize,
-          limit: Number(this.tmp.ipRuleAutoFill.limit) || 0,
+    let payloads = await Promise.all(
+      selected.countryCodes.map(code => {
+        return fetch(browser.runtime.getURL('ip-location-db/' + code + '.json')).then(response => {
+          if (!response.ok) throw new Error('Local DB shard is missing: ' + code);
+          return response.json();
         });
+      })
+    );
+    let rows = [].concat.apply(
+      [],
+      payloads.map(payload => (Array.isArray(payload.rows) ? payload.rows : []))
+    );
+    let selectedRows = this.getSelectedRows(rows, selected);
 
-        this.tmp.ipRule.ips = ranges.join('\n');
-        this.errors.ipRuleAutoFill = ranges.length === 0;
-        this.tmp.ipRuleAutoFill.status = this.$t(ranges.length ? 'options-ipRules-autofillDone.message' : 'options-ipRules-autofillEmpty.message', [ranges.length]) as string;
-      } catch (err) {
-        this.errors.ipRuleAutoFill = true;
-        this.tmp.ipRuleAutoFill.status = err.message || String(err);
-      }
+    if (!selectedRows.length) throw new Error('No IP ranges were found for this location.');
+    return { selected, selectedRows };
+  }
+
+  loadInternalDBIndex(): Promise<any> {
+    if (!this.internalDbIndex) {
+      this.internalDbIndex = fetch(browser.runtime.getURL('ip-location-db/index.json')).then(response => {
+        if (!response.ok) throw new Error('Internal DB11 was not generated yet. Run scripts/build-ip2location-db11.js first.');
+        return response.json();
+      });
+    }
+    return this.internalDbIndex;
+  }
+
+  normalizeLocationQuery(value: string): string {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  getSelectedRows(rows: any[], selected: any): any[] {
+    if (selected.type === 'macro') return rows;
+    let field = selected.type === 'country' ? 'countryCode' : selected.type;
+    let value = this.normalizeLocationQuery(selected.value);
+    return rows.filter(row => this.normalizeLocationQuery(row[field]) === value);
+  }
+
+  removeIPRuleLocation(index: number): void {
+    this.tmp.ipRule.locations.splice(index, 1);
+  }
+  applyLocationDefaults(selected: any, rows: any[]): void {
+    let timezone = this.timezoneForLocation(this.mostCommonTimezone(rows), rows);
+    if (timezone && this.timezones.some(zone => zone.zone === timezone)) this.tmp.ipRule.tz = timezone;
+
+    let countryCodes = Array.from(new Set(rows.map(row => String(row.countryCode || '').toUpperCase()).filter(Boolean)));
+    let multilingualCountries = ['BE', 'CA', 'CH', 'CY', 'FI', 'IN', 'IQ', 'LU', 'MY', 'PH', 'SG', 'ZA'];
+    let isMultilingualCountry = selected.type === 'country' && multilingualCountries.indexOf(countryCodes[0]) !== -1;
+    let languageCodes = Array.from(new Set(rows.map(row => this.languageForCountry(row.countryCode)).filter(Boolean)));
+
+    if (selected.type === 'macro' || isMultilingualCountry || languageCodes.length !== 1) {
+      this.tmp.ipRule.lang = 'en-US';
+    } else {
+      this.tmp.ipRule.lang = languageCodes[0];
+    }
+  }
+
+  mostCommonTimezone(rows: any[]): string {
+    let coverage = {};
+    rows.forEach(row => {
+      let timezone = String(row.timezone || '');
+      if (!timezone) return;
+      let size = Math.max(0, Number(row.end) - Number(row.start) + 1);
+      coverage[timezone] = (coverage[timezone] || 0) + size;
+    });
+    return Object.keys(coverage).sort((a, b) => coverage[b] - coverage[a])[0] || '';
+  }
+
+  locationTimezoneLabel(location: any): string {
+    let timezone = location.timezone || this.tmp.ipRule.tz;
+    let match = this.timezones.find(item => item.zone === timezone);
+    return match ? 'UTC' + match.offset : timezone || 'UTC';
+  }
+
+  timezoneForLocation(timezone: string, rows: any[]): string {
+    if (this.timezones.some(zone => zone.zone === timezone)) return timezone;
+    timezone = this.normalizeUTCOffset(timezone);
+
+    let countryCoverage = {};
+    rows.forEach(row => {
+      if (this.normalizeUTCOffset(String(row.timezone || '')) !== timezone) return;
+      let countryCode = String(row.countryCode || '').toUpperCase();
+      let size = Math.max(0, Number(row.end) - Number(row.start) + 1);
+      countryCoverage[countryCode] = (countryCoverage[countryCode] || 0) + size;
+    });
+    let countryCode = Object.keys(countryCoverage).sort((a, b) => countryCoverage[b] - countryCoverage[a])[0] || '';
+    let offsetZones = {
+      'BR|-02:00': 'America/Noronha',
+      'BR|-03:00': 'America/Sao_Paulo',
+      'BR|-04:00': 'America/Manaus',
+      'BR|-05:00': 'America/Rio_Branco',
+      'US|-04:00': 'America/New_York',
+      'US|-05:00': 'America/New_York',
+      'US|-06:00': 'America/Chicago',
+      'US|-07:00': 'America/Denver',
+      'US|-08:00': 'America/Los_Angeles',
+      'US|-09:00': 'America/Anchorage',
+      'US|-10:00': 'Pacific/Honolulu',
+      'CA|-03:30': 'America/St_Johns',
+      'CA|-02:30': 'America/St_Johns',
+      'CA|-03:00': 'America/Halifax',
+      'CA|-04:00': 'America/Toronto',
+      'CA|-05:00': 'America/Toronto',
+      'CA|-06:00': 'America/Winnipeg',
+      'CA|-07:00': 'America/Edmonton',
+      'CA|-08:00': 'America/Vancouver',
+      'AU|+08:00': 'Australia/Perth',
+      'AU|+10:00': 'Australia/Sydney',
+      'AU|+10:30': 'Australia/Lord_Howe',
+      'AU|+09:30': 'Australia/Adelaide',
+      'MX|-05:00': 'America/Cancun',
+      'MX|-06:00': 'America/Mexico_City',
+      'MX|-07:00': 'America/Mazatlan',
+      'MX|-08:00': 'America/Tijuana',
+      'RU|+02:00': 'Europe/Kaliningrad',
+      'RU|+03:00': 'Europe/Moscow',
+      'RU|+04:00': 'Europe/Samara',
+      'RU|+05:00': 'Asia/Yekaterinburg',
+      'RU|+06:00': 'Asia/Omsk',
+      'RU|+07:00': 'Asia/Novosibirsk',
+      'RU|+08:00': 'Asia/Irkutsk',
+      'RU|+09:00': 'Asia/Yakutsk',
+      'RU|+10:00': 'Asia/Vladivostok',
+      'RU|+11:00': 'Asia/Magadan',
+      'RU|+12:00': 'Asia/Kamchatka',
     };
+    let zone = offsetZones[countryCode + '|' + timezone] || this.countryTimezoneZone(countryCode);
+    if (zone && this.timezones.some(item => item.zone === zone)) return zone;
 
-    reader.onerror = (): void => {
-      this.errors.ipRuleAutoFill = true;
-      this.tmp.ipRuleAutoFill.status = this.$t('options-ipRules-autofillReadError.message') as string;
+    let fallback = this.timezones.find(item => this.normalizeUTCOffset(item.offset) === timezone);
+    return fallback ? fallback.zone : '';
+  }
+
+  normalizeUTCOffset(value: string): string {
+    let match = String(value || '').match(/^([+-]?)(\d{1,2}):(\d{2})$/);
+    if (!match) return value;
+    let sign = match[1] === '-' ? '-' : '+';
+    let hours = match[2].padStart(2, '0');
+    return hours === '00' && match[3] === '00' ? '0:00' : sign + hours + ':' + match[3];
+  }
+
+  countryTimezoneZone(countryCode: string): string {
+    const zones = {
+      AD: 'Europe/Andorra',
+      AE: 'Asia/Dubai',
+      AF: 'Asia/Kabul',
+      AL: 'Europe/Tirane',
+      AM: 'Asia/Yerevan',
+      AR: 'America/Argentina/Buenos_Aires',
+      AT: 'Europe/Vienna',
+      AZ: 'Asia/Baku',
+      BD: 'Asia/Dhaka',
+      BE: 'Europe/Brussels',
+      BG: 'Europe/Sofia',
+      BH: 'Asia/Qatar',
+      BO: 'America/La_Paz',
+      BY: 'Europe/Minsk',
+      CH: 'Europe/Zurich',
+      CL: 'America/Santiago',
+      CN: 'Asia/Shanghai',
+      CO: 'America/Bogota',
+      CR: 'America/Costa_Rica',
+      CZ: 'Europe/Prague',
+      DE: 'Europe/Berlin',
+      DK: 'Europe/Copenhagen',
+      DO: 'America/Santo_Domingo',
+      EC: 'America/Guayaquil',
+      EE: 'Europe/Tallinn',
+      EG: 'Africa/Cairo',
+      ES: 'Europe/Madrid',
+      FI: 'Europe/Helsinki',
+      FR: 'Europe/Paris',
+      GB: 'Europe/London',
+      GE: 'Asia/Tbilisi',
+      GR: 'Europe/Athens',
+      GT: 'America/Guatemala',
+      HK: 'Asia/Hong_Kong',
+      HN: 'America/Tegucigalpa',
+      HR: 'Europe/Belgrade',
+      HU: 'Europe/Budapest',
+      ID: 'Asia/Jakarta',
+      IE: 'Europe/Dublin',
+      IL: 'Asia/Jerusalem',
+      IN: 'Asia/Kolkata',
+      IQ: 'Asia/Baghdad',
+      IR: 'Asia/Tehran',
+      IT: 'Europe/Rome',
+      JP: 'Asia/Tokyo',
+      KE: 'Africa/Nairobi',
+      KR: 'Asia/Seoul',
+      KZ: 'Asia/Almaty',
+      LB: 'Asia/Beirut',
+      LK: 'Asia/Colombo',
+      LT: 'Europe/Vilnius',
+      LU: 'Europe/Brussels',
+      LV: 'Europe/Riga',
+      MA: 'Africa/Casablanca',
+      MD: 'Europe/Chisinau',
+      MN: 'Asia/Ulaanbaatar',
+      MO: 'Asia/Macau',
+      MY: 'Asia/Kuala_Lumpur',
+      NG: 'Africa/Lagos',
+      NL: 'Europe/Brussels',
+      NO: 'Europe/Berlin',
+      NZ: 'Pacific/Auckland',
+      PA: 'America/Panama',
+      PE: 'America/Lima',
+      PH: 'Asia/Manila',
+      PK: 'Asia/Karachi',
+      PL: 'Europe/Warsaw',
+      PT: 'Europe/Lisbon',
+      PY: 'America/Asuncion',
+      RO: 'Europe/Bucharest',
+      RS: 'Europe/Belgrade',
+      SA: 'Asia/Riyadh',
+      SE: 'Europe/Berlin',
+      SG: 'Asia/Singapore',
+      SI: 'Europe/Belgrade',
+      TH: 'Asia/Bangkok',
+      TR: 'Europe/Istanbul',
+      TW: 'Asia/Taipei',
+      UA: 'Europe/Kyiv',
+      UY: 'America/Montevideo',
+      VE: 'America/Caracas',
+      VN: 'Asia/Ho_Chi_Minh',
+      ZA: 'Africa/Johannesburg',
     };
+    return zones[countryCode] || '';
+  }
 
-    reader.readAsText(file);
+  languageForCountry(countryCode: string): string {
+    const languages = {
+      AR: 'es-AR',
+      AU: 'en-AU',
+      BR: 'pt-BR',
+      CA: 'en-CA',
+      CH: 'de-CH',
+      CL: 'es-CL',
+      CN: 'zh-CN',
+      CZ: 'cs',
+      DE: 'de',
+      DK: 'da',
+      ES: 'es-ES',
+      FI: 'fi-FI',
+      FR: 'fr',
+      GB: 'en-GB',
+      GR: 'el-GR',
+      HK: 'zh-HK',
+      HR: 'hr-HR',
+      HU: 'hu-HU',
+      ID: 'id',
+      IE: 'en-IE',
+      IL: 'he',
+      IN: 'hi-IN',
+      IR: 'fa-IR',
+      IT: 'it-IT',
+      JP: 'ja',
+      KR: 'ko-KR',
+      MX: 'es-MX',
+      NL: 'nl',
+      NO: 'nb-NO',
+      PL: 'pl',
+      PT: 'pt-PT',
+      RO: 'ro-RO',
+      RU: 'ru-RU',
+      SE: 'sv-SE',
+      SI: 'sl',
+      TH: 'th',
+      TR: 'tr-TR',
+      TW: 'zh-TW',
+      UA: 'uk',
+      VN: 'vi-VN',
+      ZA: 'en-ZA',
+    };
+    let language = languages[String(countryCode || '').toUpperCase()];
+    return language && this.languages.some(item => item.code === language) ? language : '';
   }
 
   reallyDelete(): void {
@@ -1022,7 +1370,8 @@ export default class App extends Vue {
       this.errors.ipRuleName = false;
     }
 
-    if (this.tmp.ipRule.ips === '') {
+    let hasLocations = Array.isArray(this.tmp.ipRule.locations) && this.tmp.ipRule.locations.length > 0;
+    if (this.tmp.ipRule.ips === '' && !hasLocations) {
       this.errors.ipRuleIPs = true;
       this.savingIPRule = false;
 
@@ -1031,8 +1380,8 @@ export default class App extends Vue {
       this.errors.ipRuleIPs = false;
     }
 
-    // validate ip/ip ranges
-    let rules = this.tmp.ipRule.ips.split('\n').map(r => r.trim());
+    // Validate manually entered IP/IP ranges only. Internal locations resolve on demand.
+    let rules = this.tmp.ipRule.ips === '' ? [] : this.tmp.ipRule.ips.split('\n').map(r => r.trim());
     for (let i = 0; i < rules.length; i++) {
       let isValid: boolean = false;
       let ip = rules[i].split('-');

@@ -1,10 +1,11 @@
-interface Row {
+export interface IP2LocationRow {
   start: number;
   end: number;
   countryCode: string;
   country: string;
   region: string;
   city: string;
+  timezone?: string;
 }
 
 interface QueryOptions {
@@ -30,8 +31,16 @@ const MACRO_REGION_DEFINITIONS = [
   { key: 'south_asia', labels: ['asia meridional', 'south asia'], countries: ['IN', 'PK', 'BD', 'LK', 'NP', 'BT', 'MV', 'AF'] },
   { key: 'central_asia', labels: ['asia central', 'central asia'], countries: ['KZ', 'UZ', 'TM', 'KG', 'TJ'] },
   { key: 'middle_east', labels: ['oriente medio', 'middle east'], countries: ['SA', 'AE', 'QA', 'KW', 'BH', 'OM', 'IR', 'IQ', 'IL', 'JO', 'LB', 'SY', 'YE', 'TR'] },
-  { key: 'europe', labels: ['europa', 'europe'], countries: ['PT', 'ES', 'FR', 'DE', 'IT', 'NL', 'BE', 'CH', 'AT', 'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'SE', 'NO', 'FI', 'DK', 'IE', 'GB', 'UA', 'RU'] },
-  { key: 'latin_america', labels: ['america latina', 'latin america'], countries: ['BR', 'AR', 'CL', 'UY', 'PY', 'BO', 'PE', 'CO', 'VE', 'EC', 'MX', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'CU', 'DO', 'HT'] },
+  {
+    key: 'europe',
+    labels: ['europa', 'europe'],
+    countries: ['PT', 'ES', 'FR', 'DE', 'IT', 'NL', 'BE', 'CH', 'AT', 'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'GR', 'SE', 'NO', 'FI', 'DK', 'IE', 'GB', 'UA', 'RU'],
+  },
+  {
+    key: 'latin_america',
+    labels: ['america latina', 'latin america'],
+    countries: ['BR', 'AR', 'CL', 'UY', 'PY', 'BO', 'PE', 'CO', 'VE', 'EC', 'MX', 'GT', 'HN', 'SV', 'NI', 'CR', 'PA', 'CU', 'DO', 'HT'],
+  },
   { key: 'north_america', labels: ['america do norte', 'north america'], countries: ['US', 'CA', 'MX'] },
   { key: 'north_africa', labels: ['africa norte', 'north africa'], countries: ['MA', 'DZ', 'TN', 'LY', 'EG', 'SD'] },
   { key: 'southern_africa', labels: ['africa sul', 'southern africa'], countries: ['ZA', 'NA', 'BW', 'ZW', 'MZ', 'LS', 'SZ'] },
@@ -54,7 +63,7 @@ export let getMacroRegions = (locale: string = 'en'): any[] => {
   }));
 };
 
-const FIELDS = ['country_code', 'country', 'region', 'city', 'macro', 'any'];
+const FIELDS = ['country_code', 'country', 'region', 'city', 'timezone', 'macro', 'any'];
 
 let intToIP = (value: number): string => {
   return (value >>> 24) + '.' + ((value >> 16) & 255) + '.' + ((value >> 8) & 255) + '.' + (value & 255);
@@ -88,7 +97,7 @@ let parseCSVLine = (line: string): string[] => {
   return fields;
 };
 
-let parseRows = (csvText: string): Row[] => {
+let parseRows = (csvText: string): IP2LocationRow[] => {
   return csvText
     .split(/\r?\n/)
     .map(line => parseCSVLine(line))
@@ -100,26 +109,28 @@ let parseRows = (csvText: string): Row[] => {
       country: fields[3],
       region: fields[4],
       city: fields[5],
+      timezone: fields[9] || '',
     }));
 };
 
-let rowValue = (row: Row, field: string): string => {
+let rowValue = (row: IP2LocationRow, field: string): string => {
   if (field === 'country_code') return row.countryCode;
   if (field === 'country') return row.country;
   if (field === 'region') return row.region;
   if (field === 'city') return row.city;
+  if (field === 'timezone') return row.timezone || '';
   return '';
 };
 
-let matchAny = (row: Row, value: string): boolean => {
+let matchAny = (row: IP2LocationRow, value: string): boolean => {
   if (MACRO_REGIONS[value]) {
     return MACRO_REGIONS[value].includes(row.countryCode.toUpperCase());
   }
 
-  return [row.countryCode, row.country, row.region, row.city].map(normalize).includes(value);
+  return [row.countryCode, row.country, row.region, row.city, row.timezone || ''].map(normalize).includes(value);
 };
 
-let matchCondition = (row: Row, field: string, operator: string, value: string): boolean => {
+let matchCondition = (row: IP2LocationRow, field: string, operator: string, value: string): boolean => {
   let result: boolean;
 
   if (field === 'macro') {
@@ -266,34 +277,34 @@ let compilePredicate = (node: any): Function => {
   let kind = node[0];
 
   if (kind === 'COND') {
-    return (row: Row) => matchCondition(row, node[1], node[2], node[3]);
+    return (row: IP2LocationRow) => matchCondition(row, node[1], node[2], node[3]);
   }
 
   if (kind === 'IN') {
-    return (row: Row) => node[2].some(value => matchCondition(row, node[1], '=', value));
+    return (row: IP2LocationRow) => node[2].some(value => matchCondition(row, node[1], '=', value));
   }
 
   if (kind === 'AND') {
     let left = compilePredicate(node[1]);
     let right = compilePredicate(node[2]);
-    return (row: Row) => left(row) && right(row);
+    return (row: IP2LocationRow) => left(row) && right(row);
   }
 
   if (kind === 'OR') {
     let left = compilePredicate(node[1]);
     let right = compilePredicate(node[2]);
-    return (row: Row) => left(row) || right(row);
+    return (row: IP2LocationRow) => left(row) || right(row);
   }
 
   if (kind === 'NOT') {
     let predicate = compilePredicate(node[1]);
-    return (row: Row) => !predicate(row);
+    return (row: IP2LocationRow) => !predicate(row);
   }
 
   throw new Error(`Invalid node: ${kind}`);
 };
 
-let copyRow = (row: Row): Row => {
+let copyRow = (row: IP2LocationRow): IP2LocationRow => {
   return {
     start: row.start,
     end: row.end,
@@ -301,16 +312,17 @@ let copyRow = (row: Row): Row => {
     country: row.country,
     region: row.region,
     city: row.city,
+    timezone: row.timezone || '',
   };
 };
 
-let mergeRowIntoBlock = (block: Row, row: Row): void => {
+let mergeRowIntoBlock = (block: IP2LocationRow, row: IP2LocationRow): void => {
   block.end = row.end;
 };
 
-let candidateBlocks = (rows: Row[], predicate: Function, wantMatch: boolean): Row[] => {
-  let blocks: Row[] = [];
-  let current: Row = null;
+let candidateBlocks = (rows: IP2LocationRow[], predicate: Function, wantMatch: boolean): IP2LocationRow[] => {
+  let blocks: IP2LocationRow[] = [];
+  let current: IP2LocationRow = null;
 
   for (let i = 0; i < rows.length; i++) {
     if (predicate(rows[i]) !== wantMatch) {
@@ -335,10 +347,10 @@ let candidateBlocks = (rows: Row[], predicate: Function, wantMatch: boolean): Ro
   return blocks;
 };
 
-let tolerantBlocks = (rows: Row[], predicate: Function, bridgePredicate: Function, wantMatch: boolean): Row[] => {
-  let blocks: Row[] = [];
-  let current: Row = null;
-  let bridge: Row = null;
+let tolerantBlocks = (rows: IP2LocationRow[], predicate: Function, bridgePredicate: Function, wantMatch: boolean): IP2LocationRow[] => {
+  let blocks: IP2LocationRow[] = [];
+  let current: IP2LocationRow = null;
+  let bridge: IP2LocationRow = null;
 
   for (let i = 0; i < rows.length; i++) {
     let matched = predicate(rows[i]);
@@ -381,7 +393,7 @@ let tolerantBlocks = (rows: Row[], predicate: Function, bridgePredicate: Functio
   return blocks;
 };
 
-let sortAndLimitBlocks = (blocks: Row[], sortSize: string, limit: number): Row[] => {
+let sortAndLimitBlocks = (blocks: IP2LocationRow[], sortSize: string, limit: number): IP2LocationRow[] => {
   blocks.sort((a, b) => {
     let diff = a.end - a.start - (b.end - b.start);
     return sortSize === 'asc' ? diff : -diff;
@@ -390,12 +402,11 @@ let sortAndLimitBlocks = (blocks: Row[], sortSize: string, limit: number): Row[]
   return limit > 0 ? blocks.slice(0, limit) : blocks;
 };
 
-export let queryIP2LocationCSV = (csvText: string, options: QueryOptions): string[] => {
-  let rows = parseRows(csvText);
+export let queryIP2LocationRows = (rows: IP2LocationRow[], options: QueryOptions): string[] => {
   let predicate = compilePredicate(parseWhere(options.where));
   let mode = options.mode;
   let wantMatch = mode.indexOf('nao') === -1;
-  let blocks: Row[];
+  let blocks: IP2LocationRow[];
 
   if (options.mergeWhere.trim()) {
     blocks = tolerantBlocks(rows, predicate, compilePredicate(parseWhere(options.mergeWhere)), wantMatch);
@@ -410,4 +421,8 @@ export let queryIP2LocationCSV = (csvText: string, options: QueryOptions): strin
   }
 
   return blocks.map(row => `${intToIP(row.start)}-${intToIP(row.end)}`);
+};
+
+export let queryIP2LocationCSV = (csvText: string, options: QueryOptions): string[] => {
+  return queryIP2LocationRows(parseRows(csvText), options);
 };

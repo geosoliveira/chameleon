@@ -25,7 +25,11 @@ export const changeSetting = ({ commit, state }, payload: any) => {
       action: 'toggleBadgeText',
       data: payload[0].value,
     });
-  } else if (['profile.floatingButton.enabled', 'profile.floatingButton.reloadTab', 'headers.spoofIP.preserveOnProfileChange', 'headers.spoofIP.rotateOnlyOnProfileChange'].includes(payload[0].name)) {
+  } else if (
+    ['profile.floatingButton.enabled', 'profile.floatingButton.reloadTab', 'headers.spoofIP.preserveOnProfileChange', 'headers.spoofIP.rotateOnlyOnProfileChange'].includes(
+      payload[0].name
+    )
+  ) {
     return browser.runtime.sendMessage({
       action: 'syncFloatingProfileButton',
       data: payload,
@@ -46,6 +50,7 @@ export const changeSetting = ({ commit, state }, payload: any) => {
       'options.spoofFontFingerprint',
       'options.screenSize',
       'options.screenSizeMode',
+      'options.devicePixelRatio',
       'options.timeZone',
     ].includes(payload[0].name)
   ) {
@@ -54,23 +59,18 @@ export const changeSetting = ({ commit, state }, payload: any) => {
         await browser.runtime.sendMessage({
           action: 'reloadInjectionScript',
         });
-      } else if (
-        payload[0].name === 'headers.spoofAcceptLang.enabled' &&
-        state.headers.spoofAcceptLang.enabled &&
-        state.headers.spoofAcceptLang.value === 'ipRule'
-      ) {
+      } else if (payload[0].name === 'headers.spoofAcceptLang.enabled' && state.headers.spoofAcceptLang.enabled && state.headers.spoofAcceptLang.value === 'ipRule') {
         await browser.runtime.sendMessage({
           action: 'reloadSpoofIPInfo',
         });
-      } else if (
-        payload[0].name === 'headers.spoofAcceptLang.enabled' &&
-        state.headers.spoofAcceptLang.enabled &&
-        state.headers.spoofAcceptLang.value !== 'ip'
-      ) {
+      } else if (payload[0].name === 'headers.spoofAcceptLang.enabled' && state.headers.spoofAcceptLang.enabled && state.headers.spoofAcceptLang.value !== 'ip') {
         await browser.runtime.sendMessage({
           action: 'reloadInjectionScript',
         });
-      } else if (payload[0].name === 'headers.spoofAcceptLang.enabled' || (['headers.spoofAcceptLang.value', 'options.timeZone'].includes(payload[0].name) && payload[0].value === 'ip')) {
+      } else if (
+        payload[0].name === 'headers.spoofAcceptLang.enabled' ||
+        (['headers.spoofAcceptLang.value', 'options.timeZone'].includes(payload[0].name) && payload[0].value === 'ip')
+      ) {
         await browser.runtime.sendMessage({
           action: 'reloadIPInfo',
           data: false,
@@ -86,7 +86,16 @@ export const changeSetting = ({ commit, state }, payload: any) => {
       }
     }, 350);
   } else if (
-    ['headers.spoofIP.enabled', 'headers.spoofIP.option', 'headers.spoofIP.customMode', 'headers.spoofIP.rangeFrom', 'headers.spoofIP.locationMode', 'headers.spoofIP.locationRules'].includes(payload[0].name)
+    [
+      'headers.spoofIP.enabled',
+      'headers.spoofIP.option',
+      'headers.spoofIP.customMode',
+      'headers.spoofIP.rangeFrom',
+      'headers.spoofIP.locationMode',
+      'headers.spoofIP.locationRules',
+      'headers.spoofIP.rotateLocationWithProfile',
+      'headers.spoofIP.rotateSubLocationWithProfile',
+    ].includes(payload[0].name)
   ) {
     browser.runtime.sendMessage({
       action: 'reloadSpoofIP',

@@ -1,6 +1,7 @@
 import * as lang from '../lib/language';
 import * as prof from '../lib/profiles';
 import { getTimezones } from '../lib/tz';
+import { DevicePixelRatioOptions, getRandomCompatibleProfileScreenSize, isCompatibleProfileScreenSize } from '../lib/screen-size';
 
 import util from './util';
 import webext from './webext';
@@ -67,6 +68,7 @@ export class Chameleon {
   public intervalTimeout: any;
   public platform: any;
   private browserInfo: any;
+  private excludedLocationRangeCache: any = { signature: '', ranges: [] };
   public tempStore: TemporarySettings;
   public timeout: any;
   public updateContextMenu: Function;
@@ -83,6 +85,11 @@ export class Chameleon {
       ipInfo: {
         cache: null,
         lang: '',
+        locationKey: '',
+        locationLang: '',
+        locationSubKey: '',
+        locationSubLabel: '',
+        locationTz: '',
         ruleId: '',
         status: 'idle',
         tz: '',
@@ -200,11 +207,14 @@ export class Chameleon {
       js: [
         {
           code: `
-            let settings = ${JSON.stringify(this.settings)};
-            let tempStore = ${JSON.stringify(this.tempStore)};
-            let profileCache = ${JSON.stringify(this.profileCache)};
-            let seed = ${Math.random() * 0.00000001};
-            let randObjName = '${String.fromCharCode(65 + Math.floor(Math.random() * 26)) +
+            // This prelude and inject.js share Firefox's isolated content-script
+            // global. It can be registered again after a settings change, so these
+            // bindings must be redeclarable.
+            var settings = ${JSON.stringify(this.settings)};
+            var tempStore = ${JSON.stringify(this.tempStore)};
+            var profileCache = ${JSON.stringify(this.profileCache)};
+            var seed = ${Math.random() * 0.00000001};
+            var randObjName = '${String.fromCharCode(65 + Math.floor(Math.random() * 26)) +
               Math.random()
                 .toString(36)
                 .substring(Math.floor(Math.random() * 5) + 5)}';
@@ -240,6 +250,10 @@ export class Chameleon {
   }
 
   public cleanSettings(): void {
+    if (typeof this.settings.profile.changeOnlyResolution !== 'boolean') {
+      this.settings.profile.changeOnlyResolution = false;
+    }
+
     if (!this.settings.headers.spoofIP.customMode) {
       this.settings.headers.spoofIP.customMode = 'range';
     }
@@ -252,11 +266,22 @@ export class Chameleon {
       this.settings.headers.spoofIP.rotateOnlyOnProfileChange = false;
     }
 
+    if (typeof this.settings.headers.spoofIP.rotateLocationWithProfile !== 'boolean') {
+      this.settings.headers.spoofIP.rotateLocationWithProfile = false;
+    }
+
+    if (typeof this.settings.headers.spoofIP.rotateSubLocationWithProfile !== 'boolean') {
+      this.settings.headers.spoofIP.rotateSubLocationWithProfile = false;
+    }
+
     if (!Array.isArray(this.settings.headers.spoofIP.locationRules)) {
       this.settings.headers.spoofIP.locationRules = [];
     }
 
-    if (this.settings.headers.spoofIP.locationMode === 'exclude' && !this.settings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')) {
+    if (
+      this.settings.headers.spoofIP.locationMode === 'exclude' &&
+      !this.settings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')
+    ) {
       this.settings.headers.spoofIP.locationRules.unshift({
         id: ALL_IP_RULE_ID,
         action: 'include',
@@ -315,6 +340,10 @@ export class Chameleon {
       this.settings.options.screenSizeMode = 'screenAndWindow';
     }
 
+    if (!DevicePixelRatioOptions.includes(String(this.settings.options.devicePixelRatio))) {
+      this.settings.options.devicePixelRatio = 'profile';
+    }
+
     if (!Array.isArray(this.settings.ipRules)) {
       this.settings.ipRules = [];
     }
@@ -342,6 +371,8 @@ export class Chameleon {
 
       delete this.settings.ipRules[i].locales;
     }
+
+    this.compactIPRuleLocations();
 
     // migrate Windows FF profiles
     if (this.FF_PROFILES[this.settings.profile.selected]) {
@@ -398,6 +429,13 @@ export class Chameleon {
     this.browserInfo = await browser.runtime.getBrowserInfo();
 
     this.tempStore.version = this.browserInfo.version;
+
+    // Prepare an initial spoof profile before header listeners are registered.
+    // Without this, very early page chunks can leave with the real browser headers.
+    this.updateProfile(this.settings.profile.selected);
+    await this.updateSpoofIP({ preserveCurrent: true });
+    await this.updateSpoofIPInfo();
+    this.updateProfileCache();
 
     this.intercept = new Interceptor(this.settings, this.tempStore, this.profileCache, parseInt(this.browserInfo.version) < 90);
 
@@ -771,6 +809,34 @@ export class Chameleon {
     }
   }
 
+  private compactIPRuleLocations(): void {
+    for (let i = 0; i < this.settings.ipRules.length; i++) {
+      let rule = this.settings.ipRules[i];
+      if (!Array.isArray(rule.locations) || !rule.locations.length) continue;
+
+      let migrated = false;
+      rule.locations.forEach(location => {
+        if (Array.isArray(location.records)) {
+          if (!location.recordCount) location.recordCount = location.records.length;
+          delete location.records;
+          migrated = true;
+        }
+      });
+
+      // Earlier builds copied every DB range into both locations and ips. Locations
+      // now resolve from the bundled DB only when a new spoof IP is needed.
+      if (migrated) rule.ips = [];
+    }
+  }
+
+  private getActiveProfile(): any {
+    if (this.tempStore.savedProfile) return this.tempStore.savedProfile.profile;
+    if (this.tempStore.profile && this.tempStore.profile !== 'none') return this.profileCache[this.tempStore.profile];
+    if (this.settings.profile.selected !== 'none' && !this.settings.profile.selected.startsWith('saved:')) return this.profileCache[this.settings.profile.selected];
+
+    return null;
+  }
+
   public updateProfileCache(): void {
     let profGen = new prof.Generator();
 
@@ -803,20 +869,12 @@ export class Chameleon {
     }
 
     if (this.settings.options.screenSize === 'profile') {
-      let p: any;
-
-      if (this.tempStore.savedProfile) {
-        p = this.tempStore.savedProfile.profile;
-      } else if (this.tempStore.profile && this.tempStore.profile != 'none') {
-        p = this.profileCache[this.tempStore.profile];
-      } else {
-        if (this.settings.profile.selected != 'none' && !this.settings.profile.selected.startsWith('saved:')) {
-          p = this.profileCache[this.settings.profile.selected];
-        }
-      }
+      let p = this.getActiveProfile();
 
       if (p) {
-        this.tempStore.screenSize = `${p.screen.width}x${p.screen.height}`;
+        if (!isCompatibleProfileScreenSize(p, this.tempStore.screenSize)) {
+          this.tempStore.screenSize = `${p.screen.width}x${p.screen.height}`;
+        }
       } else {
         this.tempStore.screenSize = '';
       }
@@ -850,26 +908,36 @@ export class Chameleon {
   public getFloatingProfileButtonSettings(): object {
     let canChangeProfile: boolean = this.settings.profile.selected.includes('random') || ['windows', 'macOS', 'linux', 'iOS', 'android'].includes(this.settings.profile.selected);
     let canRotateIPOnly: boolean = this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange;
+    let canRotateResolutionOnly: boolean =
+      this.settings.profile.changeOnlyResolution && this.settings.options.screenSize === 'profile' && this.settings.profile.selected !== 'none';
 
     return {
-      enabled: this.settings.config.enabled && this.settings.profile.floatingButton.enabled && (canChangeProfile || canRotateIPOnly),
+      enabled: this.settings.config.enabled && this.settings.profile.floatingButton.enabled && (canChangeProfile || canRotateIPOnly || canRotateResolutionOnly),
       reloadTab: this.settings.profile.floatingButton.reloadTab,
     };
   }
 
   public async run(): Promise<void> {
     let rotateIPOnly: boolean = this.settings.headers.spoofIP.enabled && this.settings.headers.spoofIP.rotateOnlyOnProfileChange;
+    let rotateResolutionOnly: boolean = this.settings.profile.changeOnlyResolution && this.settings.options.screenSize === 'profile' && !rotateIPOnly;
+
+    if (rotateResolutionOnly) {
+      this.tempStore.screenSize = getRandomCompatibleProfileScreenSize(this.getActiveProfile(), this.tempStore.screenSize);
+    }
 
     await this.start({
-      preserveProfile: rotateIPOnly,
-      preserveSpoofIP: !rotateIPOnly && this.settings.headers.spoofIP.preserveOnProfileChange,
+      preserveProfile: rotateIPOnly || rotateResolutionOnly,
+      preserveSpoofIP: rotateResolutionOnly || (!rotateIPOnly && this.settings.headers.spoofIP.preserveOnProfileChange),
+      rotateLocation: !rotateResolutionOnly,
     });
 
     if (this.settings.config.notificationsEnabled) {
       browser.notifications.create({
         type: 'basic',
         title: 'Chameleon',
-        message: rotateIPOnly ? `${browser.i18n.getMessage('notifications-ipChange')} ${this.tempStore.spoofIP}` : `${browser.i18n.getMessage('notifications-profileChange')} ` + this.tempStore.badge.title,
+        message: rotateIPOnly
+          ? `${browser.i18n.getMessage('notifications-ipChange')} ${this.tempStore.spoofIP}`
+          : `${browser.i18n.getMessage('notifications-profileChange')} ` + this.tempStore.badge.title,
       });
     }
   }
@@ -946,8 +1014,9 @@ export class Chameleon {
       this.updateProfile(this.settings.profile.selected);
     }
 
-    this.updateSpoofIP({
+    await this.updateSpoofIP({
       preserveCurrent: options.preserveSpoofIP === true,
+      rotateLocation: options.rotateLocation === true,
     });
     await this.updateSpoofIPInfo();
     this.updateProfileCache();
@@ -969,9 +1038,7 @@ export class Chameleon {
   private getSelectedLocationRuleIds(): string[] {
     if (this.settings.headers.spoofIP.customMode !== 'location') return [];
 
-    return this.settings.headers.spoofIP.locationRules
-      .filter(rule => rule.id !== ALL_IP_RULE_ID && rule.action !== 'exclude')
-      .map(rule => rule.id);
+    return this.settings.headers.spoofIP.locationRules.filter(rule => rule.id !== ALL_IP_RULE_ID && rule.action !== 'exclude').map(rule => rule.id);
   }
 
   private findIPRuleByIP(ip: string, preferredRuleIds: string[] = []): any {
@@ -1030,11 +1097,11 @@ export class Chameleon {
     this.tempStore.ipInfo.status = 'loading';
 
     if (!this.tempStore.spoofIP && this.settings.headers.spoofIP.enabled) {
-      this.updateSpoofIP();
+      await this.updateSpoofIP();
     }
 
     let preferredRuleIds = [this.tempStore.ipInfo.ruleId].filter(Boolean).concat(this.getSelectedLocationRuleIds());
-    let rule = this.findIPRuleByIP(this.tempStore.spoofIP, preferredRuleIds);
+    let rule = this.settings.ipRules.find(item => item.id === this.tempStore.ipInfo.ruleId) || this.findIPRuleByIP(this.tempStore.spoofIP, preferredRuleIds);
     if (!rule) {
       this.tempStore.ipInfo.lang = '';
       this.tempStore.ipInfo.ruleId = '';
@@ -1043,10 +1110,10 @@ export class Chameleon {
       return;
     }
 
-    this.tempStore.ipInfo.lang = rule.lang;
+    this.tempStore.ipInfo.lang = this.tempStore.ipInfo.locationLang || rule.lang;
     this.tempStore.ipInfo.ruleId = rule.id;
     this.tempStore.ipInfo.status = 'ready';
-    this.tempStore.ipInfo.tz = rule.tz;
+    this.tempStore.ipInfo.tz = this.tempStore.ipInfo.locationTz || rule.tz;
   }
 
   public async saveSettings(settings: any): Promise<void> {
@@ -1212,6 +1279,7 @@ export class Chameleon {
 
   public updateProfile(profile: string): void {
     this.tempStore.savedProfile = null;
+    this.tempStore.screenSize = '';
 
     if (profile === 'randomSaved') {
       if (this.settings.savedProfiles.length > 0) {
@@ -1281,14 +1349,13 @@ export class Chameleon {
           ? ''
           : this.settings.headers.spoofAcceptLang.value
         : '',
-      timeZone:
-        this.tempStore.savedProfile
-          ? this.tempStore.savedProfile.timeZone
-          : this.settings.options.timeZone === 'ip' || this.settings.options.timeZone === 'ipRule'
-          ? this.tempStore.ipInfo.tz
-          : this.settings.options.timeZone === 'default'
-          ? ''
-          : this.settings.options.timeZone,
+      timeZone: this.tempStore.savedProfile
+        ? this.tempStore.savedProfile.timeZone
+        : this.settings.options.timeZone === 'ip' || this.settings.options.timeZone === 'ipRule'
+        ? this.tempStore.ipInfo.tz
+        : this.settings.options.timeZone === 'default'
+        ? ''
+        : this.settings.options.timeZone,
       screenSize: `${profile.screen.width}x${profile.screen.height}`,
     };
 
@@ -1298,79 +1365,365 @@ export class Chameleon {
     return savedProfile;
   }
 
-  public updateSpoofIP(options: any = {}): void {
-    if (this.settings.headers.spoofIP.enabled) {
-      if (options.preserveCurrent === true && this.tempStore.spoofIP) {
-        let selectedLocationRuleIds = this.getSelectedLocationRuleIds();
-        let currentRule = this.findIPRuleByIP(this.tempStore.spoofIP, selectedLocationRuleIds);
+  private rotateStoredLocation(options: any = {}): boolean {
+    let rotateLocation = options.rotateLocation === true;
+    let rotateSubLocation = options.rotateSubLocation === true;
+    let selectedRuleIds = this.getSelectedLocationRuleIds();
+    let candidates: any[] = [];
 
-        if (currentRule) {
-          this.tempStore.ipInfo.ruleId = currentRule.id;
-        }
-
-        if (this.settings.headers.spoofIP.customMode !== 'location' || selectedLocationRuleIds.length === 0 || currentRule) {
-          return;
-        }
+    for (let i = 0; i < selectedRuleIds.length; i++) {
+      let rule = this.settings.ipRules.find(item => item.id === selectedRuleIds[i]);
+      if (!rule || !Array.isArray(rule.locations)) continue;
+      for (let j = 0; j < rule.locations.length; j++) {
+        let location = rule.locations[j];
+        if (Array.isArray(location.records) && location.records.length) candidates.push({ rule, location });
       }
-
-      this.tempStore.ipInfo.ruleId = '';
-
-      if (this.settings.headers.spoofIP.option === SpoofIPOption.Random) {
-        this.tempStore.spoofIP = util.generateIP();
-      } else if (this.settings.headers.spoofIP.customMode === 'location') {
-        let includeRanges: string[] = [];
-        let excludeRanges: string[] = [];
-        let selectedLocationRuleIds: string[] = [];
-
-        for (let i = 0; i < this.settings.headers.spoofIP.locationRules.length; i++) {
-          let locationRule = this.settings.headers.spoofIP.locationRules[i];
-          let ranges = locationRule.id === ALL_IP_RULE_ID ? [ALL_IP_RANGE] : [];
-          let selectedRule = this.settings.ipRules.find(r => r.id === locationRule.id);
-
-          if (selectedRule) {
-            ranges = selectedRule.ips;
-          }
-
-          if (ranges.length) {
-            if (locationRule.action === 'exclude') {
-              excludeRanges = excludeRanges.concat(ranges);
-            } else {
-              includeRanges = includeRanges.concat(ranges);
-              if (selectedRule) {
-                selectedLocationRuleIds.push(selectedRule.id);
-              }
-            }
-          }
-        }
-
-        this.tempStore.spoofIP = util.generateIPFromRanges(includeRanges, excludeRanges);
-        let selectedRule = this.findIPRuleByIP(this.tempStore.spoofIP, selectedLocationRuleIds);
-
-        if (selectedRule) {
-          this.tempStore.ipInfo.ruleId = selectedRule.id;
-        }
-
-        if (!this.tempStore.spoofIP && util.validateIPRange(this.settings.headers.spoofIP.rangeFrom, this.settings.headers.spoofIP.rangeTo)) {
-          let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
-          let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
-
-          this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
-        } else if (!this.tempStore.spoofIP) {
-          this.tempStore.spoofIP = util.generateIP();
-        }
-      } else {
-        let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
-        let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
-
-        this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
-      }
-    } else {
-      this.tempStore.spoofIP = '';
-      this.tempStore.ipInfo.ruleId = '';
     }
 
+    let excludedRanges = this.getExcludedLocationRanges();
+    candidates = candidates
+      .map(candidate => Object.assign({}, candidate, { records: this.getAvailableStoredRecords(candidate.location.records, excludedRanges) }))
+      .filter(candidate => candidate.records.length);
+
+    if (!candidates.length) return false;
+
+    if (rotateLocation) {
+      let alternatives = candidates.filter(candidate => candidate.location.key !== this.tempStore.ipInfo.locationKey);
+      if (alternatives.length) candidates = alternatives;
+    } else if (this.tempStore.ipInfo.locationKey) {
+      let currentLocation = candidates.filter(candidate => candidate.location.key === this.tempStore.ipInfo.locationKey);
+      if (currentLocation.length) candidates = currentLocation;
+    }
+
+    let candidate = candidates[Math.floor(Math.random() * candidates.length)];
+    let records = candidate.records;
+    let subLocation: any = null;
+
+    if (rotateSubLocation) {
+      let groups = {};
+      for (let i = 0; i < records.length; i++) {
+        let key = this.storedLocationSubKey(records[i]);
+        if (!key) continue;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(records[i]);
+      }
+
+      let subLocations = Object.keys(groups).map(key => ({ key, records: groups[key] }));
+      if (subLocations.length) {
+        let previousSubLocationKey = options.previousSubLocationKey || this.tempStore.ipInfo.locationSubKey;
+        let alternatives = subLocations.filter(item => candidate.location.key + '|' + item.key !== previousSubLocationKey);
+        if (alternatives.length) subLocations = alternatives;
+        subLocation = subLocations[Math.floor(Math.random() * subLocations.length)];
+        records = subLocation.records;
+      }
+    }
+
+    let record = records[Math.floor(Math.random() * records.length)];
+    let start = Number(record.start);
+    let end = Number(record.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || end > 4294967295) return false;
+
+    this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (end - start + 1) + start));
+    this.tempStore.ipInfo.ruleId = candidate.rule.id;
+    this.tempStore.ipInfo.locationKey = String(candidate.location.key || '');
+    this.tempStore.ipInfo.locationSubKey = subLocation ? candidate.location.key + '|' + subLocation.key : '';
+    this.tempStore.ipInfo.locationSubLabel = subLocation ? this.storedLocationSubLabel(record) : '';
+    this.tempStore.ipInfo.locationTz = String(candidate.location.timezone || record.timezone || '');
+    this.tempStore.ipInfo.locationLang = String(candidate.location.language || this.languageForCountry(record.countryCode));
+    return true;
   }
 
+  private getExcludedLocationRanges(): number[][] {
+    let excludedRules = this.settings.headers.spoofIP.locationRules.filter(rule => rule.action === 'exclude');
+    let sources = excludedRules.map(locationRule => {
+      if (locationRule.id === ALL_IP_RULE_ID) return { id: ALL_IP_RULE_ID, ips: [ALL_IP_RANGE] };
+      let rule = this.settings.ipRules.find(item => item.id === locationRule.id);
+      return { id: locationRule.id, ips: rule ? rule.ips : [] };
+    });
+    let signature = JSON.stringify(sources);
+    if (signature === this.excludedLocationRangeCache.signature) return this.excludedLocationRangeCache.ranges;
+
+    let ranges: number[][] = [];
+    sources.forEach(source =>
+      source.ips.forEach(range => {
+        if (range === ALL_IP_RANGE) {
+          ranges.push([0, 4294967295]);
+          return;
+        }
+        let parts = String(range).split('-');
+        if (parts.length !== 2) return;
+        let start = util.ipToInt(parts[0]);
+        let end = util.ipToInt(parts[1]);
+        if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end >= start) ranges.push([start, end]);
+      })
+    );
+
+    ranges.sort((a, b) => a[0] - b[0]);
+    let merged: number[][] = [];
+    ranges.forEach(range => {
+      let previous = merged[merged.length - 1];
+      if (previous && range[0] <= previous[1] + 1) previous[1] = Math.max(previous[1], range[1]);
+      else merged.push(range);
+    });
+
+    this.excludedLocationRangeCache = { signature, ranges: merged };
+    return merged;
+  }
+
+  private getAvailableStoredRecords(records: any[], excludedRanges: number[][]): any[] {
+    if (!excludedRanges.length) return records;
+    let available: any[] = [];
+
+    records.forEach(record => {
+      let start = Number(record.start);
+      let end = Number(record.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) return;
+
+      let cursor = start;
+      let index = this.firstOverlappingExcludedRange(excludedRanges, start);
+      while (index < excludedRanges.length && excludedRanges[index][0] <= end) {
+        let excluded = excludedRanges[index];
+        if (excluded[0] > cursor) available.push(Object.assign({}, record, { start: cursor, end: Math.min(end, excluded[0] - 1) }));
+        cursor = Math.max(cursor, excluded[1] + 1);
+        if (cursor > end) break;
+        index++;
+      }
+      if (cursor <= end) available.push(Object.assign({}, record, { start: cursor, end }));
+    });
+
+    return available;
+  }
+
+  private firstOverlappingExcludedRange(ranges: number[][], start: number): number {
+    let low = 0;
+    let high = ranges.length;
+    while (low < high) {
+      let mid = Math.floor((low + high) / 2);
+      if (ranges[mid][1] < start) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  }
+
+  private storedLocationSubKey(record: any): string {
+    let city = String(record.city || '').trim();
+    return city ? [record.countryCode, record.region, city].map(value => String(value || '').trim()).join('|') : '';
+  }
+
+  private storedLocationSubLabel(record: any): string {
+    return [record.city, record.region, record.country]
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private languageForCountry(countryCode: string): string {
+    const languages = {
+      AR: 'es-AR',
+      AU: 'en-AU',
+      BR: 'pt-BR',
+      CA: 'en-CA',
+      CH: 'de-CH',
+      CL: 'es-CL',
+      CN: 'zh-CN',
+      CZ: 'cs',
+      DE: 'de',
+      DK: 'da',
+      ES: 'es-ES',
+      FI: 'fi-FI',
+      FR: 'fr',
+      GB: 'en-GB',
+      GR: 'el-GR',
+      HK: 'zh-HK',
+      HR: 'hr-HR',
+      HU: 'hu-HU',
+      ID: 'id',
+      IL: 'he',
+      IN: 'hi-IN',
+      IR: 'fa-IR',
+      IT: 'it-IT',
+      JP: 'ja',
+      KR: 'ko-KR',
+      MX: 'es-MX',
+      NL: 'nl',
+      NO: 'nb-NO',
+      PL: 'pl',
+      PT: 'pt-PT',
+      RO: 'ro-RO',
+      RU: 'ru-RU',
+      SE: 'sv-SE',
+      SI: 'sl',
+      TH: 'th',
+      TR: 'tr-TR',
+      TW: 'zh-TW',
+      UA: 'uk',
+      VN: 'vi-VN',
+      ZA: 'en-ZA',
+    };
+    let code = languages[String(countryCode || '').toUpperCase()];
+    return lang.getAllLanguages().some(item => item.code === code) ? code : '';
+  }
+
+  private recordMatchesLocation(record: any, location: any): boolean {
+    if (location.type === 'macro') return (location.countryCodes || []).includes(String(record.countryCode || ''));
+    let field = location.type === 'country' ? 'countryCode' : location.type;
+    let normal = (value: any) =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    return normal(record[field]) === normal(location.value);
+  }
+
+  private recordMatchesLocations(record: any, locations: any[]): boolean {
+    return locations.some(location => this.recordMatchesLocation(record, location));
+  }
+
+  private async pickIPFromLocation(location: any, excludedLocations: any[], excludedRanges: number[][], rotateSubLocation: boolean, previousSubLocationKey: string): Promise<any> {
+    let selectedRecord: any = null;
+    let selectedWeight = 0;
+    let subLocations: any = {};
+
+    for (let i = 0; i < location.countryCodes.length; i++) {
+      let response = await fetch(browser.runtime.getURL('ip-location-db/' + location.countryCodes[i] + '.json'));
+      if (!response.ok) continue;
+      let payload = await response.json();
+      let rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+      for (let j = 0; j < rows.length; j++) {
+        let record = rows[j];
+        if (!this.recordMatchesLocation(record, location) || this.recordMatchesLocations(record, excludedLocations)) continue;
+        let available = this.getAvailableStoredRecords([record], excludedRanges);
+        for (let k = 0; k < available.length; k++) {
+          let range = available[k];
+          let weight = Number(range.end) - Number(range.start) + 1;
+          if (weight <= 0) continue;
+          if (rotateSubLocation) {
+            let key = this.storedLocationSubKey(range) || String(range.countryCode || '');
+            if (!subLocations[key] || Math.random() < 0.5) subLocations[key] = range;
+          } else {
+            selectedWeight += weight;
+            if (Math.random() * selectedWeight < weight) selectedRecord = range;
+          }
+        }
+      }
+    }
+
+    if (rotateSubLocation) {
+      let keys = Object.keys(subLocations);
+      let alternatives = keys.filter(key => location.key + '|' + key !== previousSubLocationKey);
+      let choices = alternatives.length ? alternatives : keys;
+      selectedRecord = subLocations[choices[Math.floor(Math.random() * choices.length)]];
+    }
+
+    if (!selectedRecord) return null;
+    let start = Number(selectedRecord.start);
+    let end = Number(selectedRecord.end);
+    return {
+      ip: util.ipToString(Math.floor(Math.random() * (end - start + 1) + start)),
+      record: selectedRecord,
+      subKey: rotateSubLocation ? location.key + '|' + (this.storedLocationSubKey(selectedRecord) || String(selectedRecord.countryCode || '')) : '',
+    };
+  }
+
+  public async updateSpoofIP(options: any = {}): Promise<void> {
+    if (!this.settings.headers.spoofIP.enabled) {
+      this.tempStore.spoofIP = '';
+      this.tempStore.ipInfo.ruleId = '';
+      return;
+    }
+
+    let previousSubLocationKey = this.tempStore.ipInfo.locationSubKey;
+    this.tempStore.ipInfo.locationLang = '';
+    this.tempStore.ipInfo.locationSubKey = '';
+    this.tempStore.ipInfo.locationSubLabel = '';
+    this.tempStore.ipInfo.locationTz = '';
+
+    if (options.preserveCurrent === true && this.tempStore.spoofIP) return;
+    this.tempStore.ipInfo.ruleId = '';
+
+    if (this.settings.headers.spoofIP.option === SpoofIPOption.Random) {
+      this.tempStore.spoofIP = util.generateIP();
+      return;
+    }
+
+    if (this.settings.headers.spoofIP.customMode !== 'location') {
+      let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
+      let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
+      this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
+      return;
+    }
+
+    let includeRules = this.settings.headers.spoofIP.locationRules.filter(item => item.action !== 'exclude');
+    let excludeRules = this.settings.headers.spoofIP.locationRules.filter(item => item.action === 'exclude');
+    let excludedLocations: any[] = [];
+    let excludedRanges: number[][] = [];
+    let excludedRangeStrings: string[] = [];
+    excludeRules.forEach(item => {
+      if (item.id === ALL_IP_RULE_ID) {
+        excludedRanges.push([0, 4294967295]);
+        return;
+      }
+      let rule = this.settings.ipRules.find(candidate => candidate.id === item.id);
+      if (!rule) return;
+      excludedLocations = excludedLocations.concat(rule.locations || []);
+      (rule.ips || []).forEach(range => {
+        let parts = String(range).split('-');
+        if (parts.length !== 2) return;
+        let start = util.ipToInt(parts[0]);
+        let end = util.ipToInt(parts[1]);
+        if (Number.isFinite(start) && Number.isFinite(end) && start <= end) {
+          excludedRanges.push([start, end]);
+          excludedRangeStrings.push(range);
+        }
+      });
+    });
+    excludedRanges.sort((a, b) => a[0] - b[0]);
+
+    let candidates: any[] = [];
+    includeRules.forEach(item => {
+      if (item.id === ALL_IP_RULE_ID) return;
+      let rule = this.settings.ipRules.find(candidate => candidate.id === item.id);
+      if (rule) (rule.locations || []).forEach(location => candidates.push({ rule, location }));
+    });
+
+    let rotateLocation = options.rotateLocation === true && this.settings.headers.spoofIP.rotateLocationWithProfile;
+    let rotateSubLocation = options.rotateLocation === true && this.settings.headers.spoofIP.rotateSubLocationWithProfile;
+    if (rotateLocation) {
+      let alternatives = candidates.filter(candidate => candidate.location.key !== this.tempStore.ipInfo.locationKey);
+      if (alternatives.length) candidates = alternatives;
+    }
+
+    while (candidates.length) {
+      let candidate = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+      let selected = await this.pickIPFromLocation(candidate.location, excludedLocations, excludedRanges, rotateSubLocation, previousSubLocationKey);
+      if (!selected) continue;
+      this.tempStore.spoofIP = selected.ip;
+      this.tempStore.ipInfo.ruleId = candidate.rule.id;
+      this.tempStore.ipInfo.locationKey = String(candidate.location.key || '');
+      this.tempStore.ipInfo.locationSubKey = selected.subKey;
+      this.tempStore.ipInfo.locationSubLabel = rotateSubLocation ? this.storedLocationSubLabel(selected.record) : '';
+      this.tempStore.ipInfo.locationTz = String(candidate.location.timezone || selected.record.timezone || '');
+      this.tempStore.ipInfo.locationLang = String(candidate.location.language || this.languageForCountry(selected.record.countryCode));
+      return;
+    }
+
+    let includeRanges: string[] = [];
+    includeRules.forEach(item => {
+      if (item.id === ALL_IP_RULE_ID) includeRanges.push(ALL_IP_RANGE);
+      let rule = this.settings.ipRules.find(candidate => candidate.id === item.id);
+      if (rule) includeRanges = includeRanges.concat(rule.ips || []);
+    });
+    this.tempStore.spoofIP = util.generateIPFromRanges(includeRanges, excludedRangeStrings);
+    if (!this.tempStore.spoofIP && util.validateIPRange(this.settings.headers.spoofIP.rangeFrom, this.settings.headers.spoofIP.rangeTo)) {
+      let rangeFrom = util.ipToInt(this.settings.headers.spoofIP.rangeFrom);
+      let rangeTo = util.ipToInt(this.settings.headers.spoofIP.rangeTo);
+      this.tempStore.spoofIP = util.ipToString(Math.floor(Math.random() * (rangeTo - rangeFrom + 1) + rangeFrom));
+    } else if (!this.tempStore.spoofIP) {
+      this.tempStore.spoofIP = util.generateIP();
+    }
+  }
   private checkValidOption(settingName: string, settingValue: any, possibleValues: any): any {
     if (possibleValues === 'boolean' && typeof settingValue === 'boolean') {
       return {
@@ -1594,8 +1947,17 @@ export class Chameleon {
         };
       }
 
+      if (typeof impSettings.profile.changeOnlyResolution !== 'boolean') {
+        impSettings.profile.changeOnlyResolution = false;
+      }
+
       let options = [
-        ['profile.selected', impSettings.profile.selected, profileIds.concat(['none', 'random', 'randomDesktop', 'randomMobile', 'randomSaved', 'windows', 'macOS', 'linux', 'iOS', 'android'])],
+        [
+          'profile.selected',
+          impSettings.profile.selected,
+          profileIds.concat(['none', 'random', 'randomDesktop', 'randomMobile', 'randomSaved', 'windows', 'macOS', 'linux', 'iOS', 'android']),
+        ],
+        ['profile.changeOnlyResolution', impSettings.profile.changeOnlyResolution, 'boolean'],
         ['profile.interval.option', impSettings.profile.interval.option, [0, -1, 1, 5, 10, 20, 30, 40, 50, 60]],
         ['profile.interval.min', impSettings.profile.interval.min, 'number'],
         ['profile.interval.max', impSettings.profile.interval.max, 'number'],
@@ -1642,6 +2004,14 @@ export class Chameleon {
         impSettings.headers.spoofIP.rotateOnlyOnProfileChange = false;
       }
 
+      if (typeof impSettings.headers.spoofIP.rotateLocationWithProfile !== 'boolean') {
+        impSettings.headers.spoofIP.rotateLocationWithProfile = false;
+      }
+
+      if (typeof impSettings.headers.spoofIP.rotateSubLocationWithProfile !== 'boolean') {
+        impSettings.headers.spoofIP.rotateSubLocationWithProfile = false;
+      }
+
       if (!Array.isArray(impSettings.headers.spoofIP.locationRules)) {
         impSettings.headers.spoofIP.locationRules = [];
       }
@@ -1650,7 +2020,10 @@ export class Chameleon {
         impSettings.headers.spoofIP.locationMode = 'include';
       }
 
-      if (impSettings.headers.spoofIP.locationMode === 'exclude' && !impSettings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')) {
+      if (
+        impSettings.headers.spoofIP.locationMode === 'exclude' &&
+        !impSettings.headers.spoofIP.locationRules.some(rule => rule.id === ALL_IP_RULE_ID && rule.action === 'include')
+      ) {
         impSettings.headers.spoofIP.locationRules.unshift({
           id: ALL_IP_RULE_ID,
           action: 'include',
@@ -1673,6 +2046,8 @@ export class Chameleon {
         ['headers.spoofIP.option', impSettings.headers.spoofIP.option, [0, 1]],
         ['headers.spoofIP.preserveOnProfileChange', impSettings.headers.spoofIP.preserveOnProfileChange, 'boolean'],
         ['headers.spoofIP.rotateOnlyOnProfileChange', impSettings.headers.spoofIP.rotateOnlyOnProfileChange, 'boolean'],
+        ['headers.spoofIP.rotateLocationWithProfile', impSettings.headers.spoofIP.rotateLocationWithProfile, 'boolean'],
+        ['headers.spoofIP.rotateSubLocationWithProfile', impSettings.headers.spoofIP.rotateSubLocationWithProfile, 'boolean'],
         ['headers.spoofIP.customMode', impSettings.headers.spoofIP.customMode, ['range', 'location']],
         ['headers.spoofIP.locationMode', impSettings.headers.spoofIP.locationMode, ['include', 'exclude']],
       ];
@@ -1743,6 +2118,10 @@ export class Chameleon {
         impSettings.options.screenSizeMode = 'screenAndWindow';
       }
 
+      if (!DevicePixelRatioOptions.includes(String(impSettings.options.devicePixelRatio))) {
+        impSettings.options.devicePixelRatio = 'profile';
+      }
+
       let options = [
         ['options.blockMediaDevices', impSettings.options.blockMediaDevices, 'boolean'],
         ['options.disableWebRTC', impSettings.options.disableWebRTC, 'boolean'],
@@ -1757,12 +2136,9 @@ export class Chameleon {
         ['options.spoofFontFingerprint', impSettings.options.spoofFontFingerprint, 'boolean'],
         ['options.spoofMediaDevices', impSettings.options.spoofMediaDevices, 'boolean'],
         ['options.blockCSSExfil', impSettings.options.blockCSSExfil, 'boolean'],
-        [
-          'options.screenSize',
-          impSettings.options.screenSize,
-          'screenSize',
-        ],
+        ['options.screenSize', impSettings.options.screenSize, 'screenSize'],
         ['options.screenSizeMode', impSettings.options.screenSizeMode, ['screen', 'screenAndWindow']],
+        ['options.devicePixelRatio', impSettings.options.devicePixelRatio, DevicePixelRatioOptions],
         ['options.timeZone', impSettings.options.timeZone, timezoneIds.concat(['default', 'ip', IP_RULE_VALUE])],
         ['options.cookieNotPersistent', impSettings.options.cookieNotPersistent, 'boolean'],
         [

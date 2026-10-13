@@ -559,4 +559,10 @@ let getDevice = (hardware: string, id: string): Device => {
   return devices[hardware][id][Math.floor(Math.random() * devices[hardware][id].length)];
 };
 
-export { getDevice };
+let getViewports = (hardware: string, id: string): string[] => {
+  if (!devices[hardware] || !devices[hardware][id]) return [];
+
+  return Array.from(new Set(devices[hardware][id].map((device: Device) => device.viewport)));
+};
+
+export { getDevice, getViewports };
